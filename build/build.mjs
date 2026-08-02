@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import msgpack from 'msgpack-lite';
 import { loadAll } from './load.mjs';
 import { SITE } from './site.config.mjs';
 import { homePage, scenePage, groupPage, moodPage, authorPage } from './pages.mjs';
@@ -8,7 +9,7 @@ import { scenesIndexPage, moodsIndexPage, authorsIndexPage, allPage, searchPage,
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
-const OUT = path.join(ROOT, 'docs');
+const OUT = path.join(ROOT, 'WWW');
 
 const written = new Set();
 function write(rel, html) {
@@ -70,14 +71,21 @@ for (const f of fs.readdirSync(path.join(OUT, 'assets'))) written.add(path.resol
 const index = D.pieces.map(p => ({
   i: p.id, t: p.t, a: p.a, w: p.w || '', d: p.d || '',
   s: p.s, m: p.m, o: p.origin, l: p.len, n: p.n || '',
+  fo: p.o || '', x: p.x || '',
   k: p.s.map(id => D.sceneMap[id]).filter(Boolean).flatMap(x => [x.name, ...(x.kw || [])]).join(' ')
 }));
-write('data/index.json', JSON.stringify({
+const dataPayload = {
   built: new Date().toISOString(),
   scenes: D.scenes.map(s => ({ id: s.id, name: s.name, g: s.g, desc: s.desc, kw: s.kw })),
   moods: D.moods.map(m => ({ id: m.id, name: m.name })),
   pieces: index
-}));
+};
+write('data/index.json', JSON.stringify(dataPayload));
+
+// MessagePack 二进制（网站运行时优先加载，体积更小、解析更快）
+const mpBuf = msgpack.encode(dataPayload);
+write('data/pieces.msgpack', mpBuf);
+console.log(`  MessagePack ${mpBuf.length} 字节（约等于 JSON ${Buffer.byteLength(JSON.stringify(dataPayload))} 字节的 ${Math.round(mpBuf.length / Buffer.byteLength(JSON.stringify(dataPayload)) * 100)}%）`);
 
 // GitHub Pages / SEO 辅助文件
 write('.nojekyll', '');
@@ -122,7 +130,8 @@ ${D.groups.map(g => `- ${g.name}（${g.tag}）：${D.scenesByGroup.find(x => x.i
 - 按心情检索：${base}moods/
 - 按作者检索：${base}authors/
 - 全部词句：${base}all/
-- 结构化数据（JSON）：${base}data/index.json
+- 结构化数据（MessagePack，站点运行时加载）：${base}data/pieces.msgpack
+- 结构化数据（JSON，兜底/供程序读取）：${base}data/index.json
 `);
 
 const stale = pruneStale(OUT);

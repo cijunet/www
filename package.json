@@ -10,5 +10,11 @@
     "serve": "node build/serve.mjs",
     "check": "node build/check.mjs"
   },
-  "engines": { "node": ">=18" }
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "msgpack-lite": "^0.1.26",
+    "xlsx": "^0.18.5"
+  }
 }

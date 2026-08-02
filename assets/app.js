@@ -109,7 +109,17 @@
   }
   function fetchIndex() {
     if (_idx) return _idx;
-    _idx = fetch(baseHref() + 'data/index.json').then(function (r) { return r.json(); });
+    var R = baseHref();
+    // 优先加载 MessagePack（体积更小、解析更快）；失败时回退 JSON
+    var mp = fetch(R + 'data/pieces.msgpack')
+      .then(function (r) { if (!r.ok) throw new Error('no msgpack'); return r.arrayBuffer(); })
+      .then(function (buf) {
+        if (typeof msgpack === 'undefined') throw new Error('no decoder');
+        return msgpack.decode(new Uint8Array(buf));
+      });
+    _idx = mp.catch(function () {
+      return fetch(R + 'data/index.json').then(function (r) { return r.json(); });
+    });
     return _idx;
   }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]; }); }

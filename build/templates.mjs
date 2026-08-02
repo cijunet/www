@@ -66,6 +66,7 @@ ${hero}
     <div class="copy">© ${SITE.year} ${esc(SITE.name)}</div>
   </div>
 </footer>
+<script src="${R}assets/msgpack.min.js"></script>
 <script src="${R}assets/app.js" defer></script>
 </body>
 </html>`;

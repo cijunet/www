@@ -3,3 +3,7 @@ node_modules/
 Thumbs.db
 *.log
 .workbuddy/
+
+# 构建产物（本地用 node build/build.mjs 生成；上传 WWW 到 GitHub Pages）
+docs/
+WWW/
