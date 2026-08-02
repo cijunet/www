@@ -5,13 +5,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.join(__dirname, '..', 'docs');
+const ROOT = path.join(__dirname, '..', 'WWW');
 const PORT = Number(process.argv[2]) || 4321;
 
 const TYPES = {
   '.html': 'text/html;charset=utf-8', '.css': 'text/css;charset=utf-8',
   '.js': 'text/javascript;charset=utf-8', '.json': 'application/json;charset=utf-8',
-  '.xml': 'application/xml;charset=utf-8', '.txt': 'text/plain;charset=utf-8',
+  '.msgpack': 'application/octet-stream', '.xml': 'application/xml;charset=utf-8',
+  '.txt': 'text/plain;charset=utf-8',
   '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp'
 };
 
