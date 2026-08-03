@@ -1,4 +1,4 @@
-import { layout, cardList, filterBar } from './templates.mjs';
+import { layout, cardList, filterBar, nearMeBlock } from './templates.mjs';
 import { esc } from './util.mjs';
 import { SITE } from './site.config.mjs';
 
@@ -41,6 +41,24 @@ export function moodsIndexPage(D) {
   return layout({ depth: 1, title: '按心情找', desc, canonical: 'moods/', hero, content });
 }
 
+/* ── 地点索引 ───────────────────────────────── */
+export function placesIndexPage(D) {
+  const desc = `按地点找词句：江南、塞外、长安、故乡、他乡……共 ${D.places.length} 处地方，每处都收着与之相称的句子。`;
+  const hero = `<section class="page-hero">
+  <div class="wrap">
+    <nav class="crumb"><a href="${R1}">首页</a> › <span>按地点</span></nav>
+    <h1>按地点找</h1>
+    <p class="lead">同一句诗，写在江南是软的，写在塞外是硬的。按地方进，找最对味的那一句。</p>
+  </div>
+</section>`;
+  const content = `<div class="wrap">
+    ${nearMeBlock()}
+    <div class="m-grid big">
+      ${D.places.map(pl => `<a class="m-card" href="${R1}p/${pl.id}/"><b>${esc(pl.name)}</b><i>${esc(pl.desc)}</i><em>${D.byPlaceMap[pl.id].length}</em></a>`).join('')}
+    </div></div>`;
+  return layout({ depth: 1, title: '按地点找', desc, canonical: 'places/', hero, content });
+}
+
 /* ── 作者索引 ───────────────────────────────── */
 export function authorsIndexPage(D) {
   const desc = `${SITE.name}收录的 ${D.authors.length} 位作者，从李白杜甫苏轼到王尔德加缪，每位都可单独浏览。`;
@@ -69,7 +87,7 @@ export function allPage(D) {
   </div>
 </section>`;
   const content = `<div class="wrap">
-  ${filterBar(D.moods)}
+  ${filterBar(D.moods, D.places)}
   ${cardList(list, R1)}
 </div>`;
   return layout({ depth: 1, title: '全部词句', desc, canonical: 'all/', hero, content });

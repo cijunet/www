@@ -4,6 +4,21 @@ Thumbs.db
 *.log
 .workbuddy/
 
-# 构建产物（本地用 node build/build.mjs 生成；上传 WWW 到 GitHub Pages）
+# 构建产物（本地用 node build/build.mjs 生成；上传到 GitHub Pages）
 docs/
 WWW/
+WWW.build/
+WWW2/
+site/
+www/
+www2/
+www3/
+dist/
+dist2/
+dist3/
+dist4/
+dist5/
+dist6/
+WWW_preview/
+WWW_preview2/
+site_bak_*/

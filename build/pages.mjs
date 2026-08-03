@@ -1,4 +1,4 @@
-import { layout, card, cardList, filterBar } from './templates.mjs';
+import { layout, card, cardList, filterBar, nearMeBlock } from './templates.mjs';
 import { esc, rel, tierLabel } from './util.mjs';
 import { SITE } from './site.config.mjs';
 
@@ -25,6 +25,8 @@ export function homePage(D) {
 </section>`;
 
   const content = `<div class="wrap">
+${nearMeBlock({ compact: true })}
+
 ${D.scenesByGroup.map(g => `<section class="g-block">
   <h2 class="g-title"><a href="${R}g/${g.id}/">${esc(g.name)}</a><span>${esc(g.tag)}</span></h2>
   <div class="s-grid">
@@ -40,6 +42,13 @@ ${D.scenesByGroup.map(g => `<section class="g-block">
   <h2 class="g-title"><a href="${R}moods/">按心情找</a><span>不知道该归到哪个场景时，从情绪进</span></h2>
   <div class="m-grid">
     ${D.moods.map(m => `<a class="m-card" href="${R}m/${m.id}/"><b>${esc(m.name)}</b><i>${esc(m.desc)}</i><em>${D.byMoodMap[m.id].length}</em></a>`).join('')}
+  </div>
+</section>
+
+<section class="g-block">
+  <h2 class="g-title"><a href="${R}places/">按地点找</a><span>同一句诗，写在江南是软的，写在塞外是硬的</span></h2>
+  <div class="m-grid">
+    ${D.places.map(pl => `<a class="m-card" href="${R}p/${pl.id}/"><b>${esc(pl.name)}</b><i>${esc(pl.desc)}</i><em>${D.byPlaceMap[pl.id].length}</em></a>`).join('')}
   </div>
 </section>
 
@@ -82,7 +91,7 @@ export function scenePage(D, s) {
 </section>`;
 
   const content = `<div class="wrap">
-  ${filterBar(usedMoods)}
+  ${filterBar(usedMoods, D.places)}
   ${cardList(list, R2, { showScenes: true })}
   <section class="also">
     <h2>同一类里的其他处境</h2>
@@ -144,7 +153,7 @@ export function moodPage(D, m) {
   </div>
 </section>`;
   const content = `<div class="wrap">
-  ${filterBar(null)}
+  ${filterBar(null, D.places)}
   ${cardList(list, R2)}
   <section class="also">
     <h2>换个心情</h2>
@@ -167,7 +176,7 @@ export function authorPage(D, a) {
   </div>
 </section>`;
   const content = `<div class="wrap">
-  ${filterBar(null)}
+  ${filterBar(null, D.places)}
   ${cardList(list, R2)}
 </div>`;
   const jsonld = {
@@ -176,4 +185,27 @@ export function authorPage(D, a) {
     url: `${SITE.origin}${SITE.base}a/${a.slug}/`
   };
   return layout({ depth: 2, title: `${a.name}的句子`, desc, canonical: `a/${a.slug}/`, hero, content, jsonld, bodyClass: 'page-author' });
+}
+
+/* ── 地点页 ─────────────────────────────────── */
+export function placePage(D, pl) {
+  const list = D.byPlaceMap[pl.id];
+  const desc = `${pl.name}（${pl.desc}）能用作注脚、能当背景、能替你说出那点情绪的 ${list.length} 条词句。`;
+  const hero = `<section class="page-hero">
+  <div class="wrap">
+    <nav class="crumb"><a href="${R2}">首页</a> › <a href="${R2}places/">按地点</a> › <span>${esc(pl.name)}</span></nav>
+    <h1>${esc(pl.name)}</h1>
+    <p class="lead">${esc(pl.desc)}</p>
+    <p class="stat">共 ${list.length} 句</p>
+  </div>
+</section>`;
+  const content = `<div class="wrap">
+  ${filterBar(null)}
+  ${cardList(list, R2, { showScenes: true })}
+  <section class="also">
+    <h2>换个地点</h2>
+    <div class="also-list">${D.places.filter(x => x.id !== pl.id).map(x => `<a href="${R2}p/${x.id}/">${esc(x.name)}<em>${D.byPlaceMap[x.id].length}</em></a>`).join('')}</div>
+  </section>
+</div>`;
+  return layout({ depth: 2, title: `${pl.name}的词句`, desc, canonical: `p/${pl.id}/`, hero, content, bodyClass: 'page-place' });
 }

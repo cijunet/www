@@ -3,13 +3,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import msgpack from 'msgpack-lite';
 import { loadAll } from './load.mjs';
+import { GAZETTEER, geoClientJSON } from './gazetteer.mjs';
+import { tagPieces } from './geotag.mjs';
 import { SITE } from './site.config.mjs';
-import { homePage, scenePage, groupPage, moodPage, authorPage } from './pages.mjs';
-import { scenesIndexPage, moodsIndexPage, authorsIndexPage, allPage, searchPage, aboutPage } from './pages2.mjs';
+import { homePage, scenePage, groupPage, moodPage, authorPage, placePage } from './pages.mjs';
+import { scenesIndexPage, moodsIndexPage, authorsIndexPage, placesIndexPage, allPage, searchPage, aboutPage } from './pages2.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
-const OUT = path.join(ROOT, 'WWW');
+const OUT = path.join(ROOT, process.env.BUILD_OUT || 'site');
 
 const written = new Set();
 function write(rel, html) {
@@ -48,12 +50,37 @@ function copyDir(src, dest) {
 const t0 = Date.now();
 const D = await loadAll();
 
+// 构建前校验：错位 id / 空场景 / 重复正文 一律告警，避免脏数据静默上线
+(function validate() {
+  const sc = new Set(D.scenes.map(s => s.id));
+  const mo = new Set(D.moods.map(s => s.id));
+  const pls = new Set(D.places.map(s => s.id));
+  const norm = s => String(s || '').replace(/[\s，。、？！；：""''‘’“”（）()《》·—…\-.,!?;:]/g, '');
+  const seen = new Set();
+  let badS = 0, badM = 0, badP = 0, emptyS = 0, dup = 0;
+  for (const p of D.pieces) {
+    (p.s || []).forEach(x => { if (!sc.has(x)) { badS++; console.warn('  ⚠ 未知场景id:', x, '|', (p.t || '').slice(0, 14)); } });
+    (p.m || []).forEach(x => { if (!mo.has(x)) { badM++; console.warn('  ⚠ 未知心情id:', x, '|', (p.t || '').slice(0, 14)); } });
+    (p.pl || []).forEach(x => { if (!pls.has(x)) { badP++; console.warn('  ⚠ 未知地点id:', x, '|', (p.t || '').slice(0, 14)); } });
+    if (!p.s || !p.s.length) emptyS++;
+    const k = norm(p.t); if (k) { if (seen.has(k)) dup++; else seen.add(k); }
+  }
+  if (emptyS) console.warn('  ⚠ 空场景id 条目:', emptyS);
+  if (dup) console.warn('  ⚠ 重复正文 条数:', dup);
+  if (!badS && !badM && !badP && !emptyS && !dup) console.log('  校验通过：无错位 id / 空场景 / 重复正文');
+})();
+
+// 地名自动标注：扫「出处/题目」得题咏地(gw)，扫「正文」得描写地(gd)
+const geoStat = tagPieces(D.pieces);
+console.log(geoStat.report());
+
 fs.mkdirSync(OUT, { recursive: true });
 
 let n = 0;
 writePage('', homePage(D)); n++;
 writePage('scenes', scenesIndexPage(D)); n++;
 writePage('moods', moodsIndexPage(D)); n++;
+writePage('places', placesIndexPage(D)); n++;
 writePage('authors', authorsIndexPage(D)); n++;
 writePage('all', allPage(D)); n++;
 writePage('search', searchPage(D)); n++;
@@ -62,22 +89,39 @@ for (const s of D.scenes) { writePage(`s/${s.id}`, scenePage(D, s)); n++; }
 for (const g of D.groups) { writePage(`g/${g.id}`, groupPage(D, g)); n++; }
 for (const m of D.moods) { writePage(`m/${m.id}`, moodPage(D, m)); n++; }
 for (const a of D.authors) { writePage(`a/${a.slug}`, authorPage(D, a)); n++; }
+for (const pl of D.places) { writePage(`p/${pl.id}`, placePage(D, pl)); n++; }
 
 // 静态资源
 copyDir(path.join(ROOT, 'assets'), path.join(OUT, 'assets'));
-for (const f of fs.readdirSync(path.join(OUT, 'assets'))) written.add(path.resolve(OUT, 'assets', f));
+// 把 assets 下所有文件都标记为已写入，避免 pruneStale 误删
+// （vendor / models 为已移除的语音资源，不再保护，允许被清理）
+(function markAssets(dir) {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) {
+      if (e.name === 'vendor' || e.name === 'models') continue;
+      markAssets(p);
+    } else written.add(path.resolve(p));
+  }
+})(path.join(OUT, 'assets'));
 
 // 搜索索引（精简字段，压体积）
 const index = D.pieces.map(p => ({
   i: p.id, t: p.t, a: p.a, w: p.w || '', d: p.d || '',
-  s: p.s, m: p.m, o: p.origin, l: p.len, n: p.n || '',
+  s: p.s, m: p.m, pl: p.pl || [], o: p.origin, l: p.len, n: p.n || '',
   fo: p.o || '', x: p.x || '',
-  k: p.s.map(id => D.sceneMap[id]).filter(Boolean).flatMap(x => [x.name, ...(x.kw || [])]).join(' ')
+  gw: p.gw || [], gd: p.gd || [],
+  k: [...p.s.map(id => D.sceneMap[id]).filter(Boolean).flatMap(x => [x.name, ...(x.kw || [])]),
+     ...(p.pl || []).map(id => D.placeMap[id]).filter(Boolean).map(x => x.name),
+     ...[...(p.gw || []), ...(p.gd || [])].map(id => (GAZETTEER.find(g => g.id === id) || {}).name).filter(Boolean)
+    ].join(' ')
 }));
 const dataPayload = {
   built: new Date().toISOString(),
   scenes: D.scenes.map(s => ({ id: s.id, name: s.name, g: s.g, desc: s.desc, kw: s.kw })),
   moods: D.moods.map(m => ({ id: m.id, name: m.name })),
+  places: D.places.map(pl => ({ id: pl.id, name: pl.name })),
+  geo: geoClientJSON(),
   pieces: index
 };
 write('data/index.json', JSON.stringify(dataPayload));
@@ -89,12 +133,50 @@ console.log(`  MessagePack ${mpBuf.length} 字节（约等于 JSON ${Buffer.byte
 
 // GitHub Pages / SEO 辅助文件
 write('.nojekyll', '');
+// 自定义域名（GitHub Pages 读取此文件把站点挂到 ciju.net）+ 404 页
+write('CNAME', SITE.origin.replace(/^https?:\/\//, '').replace(/\/$/, ''));
+// Service Worker：让站点具备 App 体验（可安装、可离线、秒开）
+write('sw.js', `const APP='ciju-app-v12';            // 易变的：app.js / style.css / 数据 —— 网络优先，永远取最新
+const SHELL=['/','/index.html','/assets/style.css','/assets/app.js','/assets/msgpack.min.js','/assets/manifest.webmanifest','/assets/icon.svg','/404.html','/scenes/','/moods/','/places/','/authors/','/all/','/search/','/about/'];
+self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(APP).then(c=>c.addAll(SHELL).catch(()=>{})).then(()=>true));});
+self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==APP).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
+self.addEventListener('fetch',e=>{
+  const req=e.request;
+  if(req.method!=='GET')return;
+  const url=new URL(req.url);
+  if(url.origin!==location.origin)return;
+  // app.js / style.css / 数据 / 页面：网络优先，永远取最新；离线才用缓存
+  e.respondWith(fetch(req).then(r=>{if(r&&r.ok){const cp=r.clone();caches.open(APP).then(c=>c.put(req,cp));}return r;}).catch(()=>caches.match(req).then(m=>m||caches.match('/index.html'))));
+});`);
+write('404.html', `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>没找着 — ${SITE.name}</title>
+<meta name="robots" content="noindex">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%23a8322d'/%3E%3Ctext x='50' y='72' font-size='64' text-anchor='middle' fill='%23faf7f0' font-family='serif'%3E%E8%AF%8D%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body class="page-home">
+<header class="site-head"><div class="wrap head-inner"><a class="brand" href="./"><span class="brand-mark">词</span><span class="brand-text"><b>${SITE.name}</b><i>${SITE.tagline}</i></span></a></div></header>
+<main id="main"><section class="hero" style="border-bottom:0"><div class="wrap">
+<h1>这句，还没收</h1>
+<p class="hero-sub">你要找的那一句，本站暂时没有。<br>不如换个处境翻翻，或者去全站里慢慢找。</p>
+<div class="hero-hot">
+<a href="./">回到首页</a><a href="scenes/">全部场景</a><a href="moods/">按心情找</a><a href="places/">按地点找</a><a href="authors/">按作者找</a><a href="all/">全部词句</a><a href="search/">站内搜索</a>
+</div>
+</div></section></main>
+<footer class="site-foot"><div class="wrap"><div class="copy">© ${SITE.year} ${SITE.name}</div></div></footer>
+</body>
+</html>`);
 const base = SITE.origin.replace(/\/$/, '') + SITE.base;
 const urls = [
-  '', 'scenes/', 'moods/', 'authors/', 'all/', 'search/', 'about/',
+  '', 'scenes/', 'moods/', 'places/', 'authors/', 'all/', 'search/', 'about/',
   ...D.scenes.map(s => `s/${s.id}/`),
   ...D.groups.map(g => `g/${g.id}/`),
   ...D.moods.map(m => `m/${m.id}/`),
+  ...D.places.map(pl => `p/${pl.id}/`),
   ...D.authors.map(a => `a/${a.slug}/`)
 ];
 write('sitemap.xml', `<?xml version="1.0" encoding="UTF-8"?>
@@ -114,6 +196,7 @@ ${SITE.name} 是一个按「具体处境」组织的中文好词好句检索站�
 - 词句：${D.pieces.length} 条
 - 场景：${D.scenes.length} 个，归入 ${D.groups.length} 个大类
 - 情绪标签：${D.moods.length} 种
+- 地点标签：${D.places.length} 处
 - 作者：${D.authors.length} 位
 
 ## 核心设计
@@ -128,6 +211,7 @@ ${D.groups.map(g => `- ${g.name}（${g.tag}）：${D.scenesByGroup.find(x => x.i
 ## 主要入口
 - 全部场景：${base}scenes/
 - 按心情检索：${base}moods/
+- 按地点检索：${base}places/
 - 按作者检索：${base}authors/
 - 全部词句：${base}all/
 - 结构化数据（MessagePack，站点运行时加载）：${base}data/pieces.msgpack

@@ -1,0 +1,28 @@
+{
+  "name": "词句 · 此刻，说句好的",
+  "short_name": "词句",
+  "description": "按此刻的处境找词句。古诗词、名人名言、中外金句，自动匹配最贴切的一句。",
+  "lang": "zh-CN",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait",
+  "background_color": "#faf7f0",
+  "theme_color": "#a8322d",
+  "categories": ["books", "education", "lifestyle"],
+  "icons": [
+    {
+      "src": "assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

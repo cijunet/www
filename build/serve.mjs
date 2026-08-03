@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.join(__dirname, '..', 'WWW');
+const ROOT = path.join(__dirname, '..', process.argv[3] || 'WWW');
 const PORT = Number(process.argv[2]) || 4321;
 
 const TYPES = {
@@ -13,7 +13,8 @@ const TYPES = {
   '.js': 'text/javascript;charset=utf-8', '.json': 'application/json;charset=utf-8',
   '.msgpack': 'application/octet-stream', '.xml': 'application/xml;charset=utf-8',
   '.txt': 'text/plain;charset=utf-8',
-  '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp'
+  '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp',
+  '.mjs': 'text/javascript;charset=utf-8', '.wasm': 'application/wasm'
 };
 
 http.createServer((req, res) => {
@@ -24,7 +25,12 @@ http.createServer((req, res) => {
   try { if (fs.statSync(file).isDirectory()) file = path.join(file, 'index.html'); } catch {}
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(404, { 'Content-Type': 'text/html;charset=utf-8' }).end('<h1>404</h1>'); return; }
-    res.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
+    res.writeHead(200, {
+      'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream',
+      'Content-Length': Buffer.byteLength(data),
+      'Accept-Ranges': 'bytes',
+      'Cache-Control': 'no-cache'
+    });
     res.end(data);
   });
 }).listen(PORT, () => console.log(`\n  预览 → http://localhost:${PORT}\n`));

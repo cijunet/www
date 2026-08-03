@@ -58,42 +58,68 @@ export async function loadAll() {
   const moods = toObj(rowsOf(wb, '心情')).map(m => ({ id: asStr(m.id), name: asStr(m['名称']), desc: asStr(m['描述']) }))
     .filter(m => m.id);
 
+  // ── 地点 ──
+  const places = toObj(rowsOf(wb, '地点')).map(pl => ({ id: asStr(pl.id), name: asStr(pl['名称']), desc: asStr(pl['描述']) }))
+    .filter(pl => pl.id);
+
   const sceneMap = Object.fromEntries(scenes.map(s => [s.id, s]));
   const moodMap = Object.fromEntries(moods.map(m => [m.id, m]));
+  const placeMap = Object.fromEntries(places.map(pl => [pl.id, pl]));
   const groupMap = Object.fromEntries(groups.map(g => [g.id, g]));
-  const scenesByGroup = groups.map(g => ({ ...g, scenes: scenes.filter(s => s.g === g.id) }));
+  let scenesByGroup = groups.map(g => ({ ...g, scenes: scenes.filter(s => s.g === g.id) }));
+
+  // 合并补充数据源（当主 xlsx 被 Excel 占用、无法直接写入时的临时写入）
+  // 支持 data/supplement*.json 多个文件：新增内容只需新建一个 supplementN.json（现有文件不可覆盖）
+  const SUP_DIR = path.join(ROOT, 'data');
+  const SUP_FILES = fs.existsSync(SUP_DIR)
+    ? fs.readdirSync(SUP_DIR).filter(f => /^supplement.*\.json$/.test(f)).map(f => path.join(SUP_DIR, f))
+    : [];
+  for (const SUP of SUP_FILES) {
+    try {
+      const sup = JSON.parse(fs.readFileSync(SUP, 'utf8'));
+      for (const s of (sup.scenes || [])) {
+        if (!sceneMap[s.id]) scenes.push({ id: asStr(s.id), g: asStr(s['大类id']), name: asStr(s['名称']), desc: asStr(s['描述']), kw: splitIds(s['关键词']) });
+      }
+      for (const ns of scenes) sceneMap[ns.id] = ns;
+      scenesByGroup = groups.map(g => ({ ...g, scenes: scenes.filter(s => s.g === g.id) }));
+    } catch (e) { warnings.push(`${path.basename(SUP)} 读取失败：` + e.message); }
+  }
 
   // ── 词句 ──
   const raw = toObj(rowsOf(wb, '词句'))
     .map((p, i) => ({
       t: asStr(p['正文']), a: asStr(p['作者']), w: asStr(p['作品']), d: asStr(p['年代国别']),
-      s: splitIds(p['场景id']), m: splitIds(p['心情id']),
+      s: splitIds(p['场景id']), m: splitIds(p['心情id']), pl: splitIds(p['地点id']),
       n: asStr(p['怎么用']), o: asStr(p['外文原句']), x: asStr(p['白话']), _i: i
     }))
     .filter(p => p.t);
 
   const seen = new Map();
   const pieces = [];
-  for (const p of raw) {
-    if (!p.t) { warnings.push(`第 ${p._i + 2} 行缺正文，已跳过`); continue; }
+  function normalizePiece(p) {
+    if (!p.t) { warnings.push(`第 ${p._i + 2} 行缺正文，已跳过`); return; }
     const key = p.t.replace(/\s/g, '');
-    if (seen.has(key)) { warnings.push(`重复词句「${p.t.slice(0, 14)}…」 与第 ${seen.get(key) + 2} 行`); continue; }
+    if (seen.has(key)) { warnings.push(`重复词句「${p.t.slice(0, 14)}…」 与第 ${seen.get(key) + 2} 行`); return; }
     seen.set(key, p._i);
 
     // 自动纠错：场景/心情 id 写串位是最常见的错误，能救的直接救
     const sRaw = [...new Set(p.s)];
     const mRaw = [...new Set(p.m)];
+    const pRaw = [...new Set(p.pl || [])];
     const sList = [], mList = [...mRaw.filter(id => moodMap[id])];
+    const pList = [...pRaw.filter(id => placeMap[id])];
 
     for (const id of sRaw) {
       if (sceneMap[id]) { sList.push(id); continue; }
       if (moodMap[id]) { if (!mList.includes(id)) mList.push(id); continue; }      // 心情写进了场景位
+      if (placeMap[id]) { if (!pList.includes(id)) pList.push(id); continue; }     // 地点写进了场景位
       if (groupMap[id]) { warnings.push(`第 ${p._i + 2} 行「${p.t.slice(0, 10)}」用了大类 ${id} 当场景，已忽略`); continue; }
       warnings.push(`第 ${p._i + 2} 行「${p.t.slice(0, 10)}」未知场景 ${id}`);
     }
     for (const id of mRaw) {
       if (moodMap[id]) continue;
       if (sceneMap[id]) { if (!sList.includes(id)) sList.push(id); continue; }     // 场景写进了心情位
+      if (placeMap[id]) { if (!pList.includes(id)) pList.push(id); continue; }     // 地点写进了心情位
       warnings.push(`第 ${p._i + 2} 行「${p.t.slice(0, 10)}」未知心情 ${id}`);
     }
     if (!sList.length) warnings.push(`第 ${p._i + 2} 行「${p.t.slice(0, 10)}」没有任何有效场景，不会出现在任何场景页`);
@@ -107,10 +133,25 @@ export async function loadAll() {
       authorSlug,
       s: sList,
       m: mList,
+      pl: pList,
       origin: originOf(p),
       len: charLen(p.t),
       sceneRefs: sList.map(id => sceneMap[id])
     });
+  }
+  for (const p of raw) normalizePiece(p);
+
+  // 补充数据源中的词句
+  for (const SUP of SUP_FILES) {
+    try {
+      const sup = JSON.parse(fs.readFileSync(SUP, 'utf8'));
+      const supPieces = (sup.pieces || []).map((p, i) => ({
+        t: asStr(p['正文']), a: asStr(p['作者']), w: asStr(p['作品']), d: asStr(p['年代国别']),
+        s: splitIds(p['场景id']), m: splitIds(p['心情id']), pl: splitIds(p['地点id']),
+        n: asStr(p['怎么用']), o: asStr(p['外文原句']), x: asStr(p['白话']), _i: 400000 + i
+      }));
+      for (const p of supPieces) normalizePiece(p);
+    } catch (e) { warnings.push(`${path.basename(SUP)} 解析失败：` + e.message); }
   }
 
   // 作者索引
@@ -131,6 +172,11 @@ export async function loadAll() {
   for (const m of moods) byMoodMap[m.id] = [];
   for (const p of pieces) for (const id of p.m) byMoodMap[id].push(p);
 
+  const byPlaceMap = {};
+  for (const pl of places) byPlaceMap[pl.id] = [];
+  for (const p of pieces) for (const id of p.pl) if (byPlaceMap[id]) byPlaceMap[id].push(p);
+  for (const id in byPlaceMap) byPlaceMap[id].sort((a, b) => a.len - b.len);
+
   const empties = scenes.filter(s => !bySceneMap[s.id].length).map(s => s.id);
   if (empties.length) warnings.push(`空场景（无任何词句）：${empties.join(', ')}`);
   const thin = scenes.filter(s => bySceneMap[s.id].length > 0 && bySceneMap[s.id].length < 8)
@@ -138,8 +184,8 @@ export async function loadAll() {
   if (thin.length) warnings.push(`偏少场景（<8 句）：${thin.join(', ')}`);
 
   return {
-    pieces, scenes, groups, moods, authors,
-    sceneMap, groupMap, moodMap, scenesByGroup,
-    bySceneMap, byMoodMap, warnings, ROOT
+    pieces, scenes, groups, moods, places, authors,
+    sceneMap, groupMap, moodMap, placeMap, scenesByGroup,
+    bySceneMap, byMoodMap, byPlaceMap, warnings, ROOT
   };
 }
