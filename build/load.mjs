@@ -4,11 +4,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as XLSX from 'xlsx';
-import { slugify, authorSlugTable, hash, charLen } from './util.mjs';
+import { slugify, authorSlugTable, authorAlias, hash, charLen } from './util.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
-const XLSX_PATH = path.join(ROOT, 'data', '词句数据.xlsx');
+// 默认读 data/词句数据.xlsx（唯一真源）。可用 CIJU_XLSX 环境变量临时指向其它数据源文件。
+const XLSX_PATH = path.join(ROOT, 'data', process.env.CIJU_XLSX || '词句数据.xlsx');
 
 const CLASSIC_DYN = ['先秦','春秋','战国','汉','三国','晋','南北朝','隋','唐','五代','宋','元','明','清','近代'];
 
@@ -96,11 +97,18 @@ export async function loadAll() {
 
   const seen = new Map();
   const pieces = [];
+  let mergedDups = 0;
+  const normText = s => s.replace(/[\s，。、？！；：""''‘’“”（）()《》·—…\-.,!?;:]/g, '');
+  function mergeTags(kept, sList, mList, pList) {
+    let changed = false;
+    for (const id of sList) if (!kept.s.includes(id)) { kept.s.push(id); changed = true; }
+    for (const id of mList) if (!kept.m.includes(id)) { kept.m.push(id); changed = true; }
+    for (const id of pList) if (!kept.pl.includes(id)) { kept.pl.push(id); changed = true; }
+    if (changed) kept.sceneRefs = kept.s.map(id => sceneMap[id]);
+  }
   function normalizePiece(p) {
     if (!p.t) { warnings.push(`第 ${p._i + 2} 行缺正文，已跳过`); return; }
-    const key = p.t.replace(/\s/g, '');
-    if (seen.has(key)) { warnings.push(`重复词句「${p.t.slice(0, 14)}…」 与第 ${seen.get(key) + 2} 行`); return; }
-    seen.set(key, p._i);
+    const key = normText(p.t);
 
     // 自动纠错：场景/心情 id 写串位是最常见的错误，能救的直接救
     const sRaw = [...new Set(p.s)];
@@ -122,11 +130,14 @@ export async function loadAll() {
       if (placeMap[id]) { if (!pList.includes(id)) pList.push(id); continue; }     // 地点写进了心情位
       warnings.push(`第 ${p._i + 2} 行「${p.t.slice(0, 10)}」未知心情 ${id}`);
     }
+
+    // 重复正文：不丢弃，把场景/心情/地点标签并入先收录的那条（一句多用）
+    if (seen.has(key)) { mergeTags(seen.get(key), sList, mList, pList); mergedDups++; return; }
     if (!sList.length) warnings.push(`第 ${p._i + 2} 行「${p.t.slice(0, 10)}」没有任何有效场景，不会出现在任何场景页`);
 
-    const author = p.a || '佚名';
+    const author = authorAlias[p.a] || p.a || '佚名';
     const authorSlug = slugify(author, authorSlugTable);
-    pieces.push({
+    const piece = {
       ...p,
       id: hash(key),
       a: author,
@@ -137,7 +148,9 @@ export async function loadAll() {
       origin: originOf(p),
       len: charLen(p.t),
       sceneRefs: sList.map(id => sceneMap[id])
-    });
+    };
+    pieces.push(piece);
+    seen.set(key, piece);
   }
   for (const p of raw) normalizePiece(p);
 
@@ -186,6 +199,6 @@ export async function loadAll() {
   return {
     pieces, scenes, groups, moods, places, authors,
     sceneMap, groupMap, moodMap, placeMap, scenesByGroup,
-    bySceneMap, byMoodMap, byPlaceMap, warnings, ROOT
+    bySceneMap, byMoodMap, byPlaceMap, warnings, mergedDups, ROOT
   };
 }

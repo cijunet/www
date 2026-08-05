@@ -6,12 +6,14 @@ import { loadAll } from './load.mjs';
 import { GAZETTEER, geoClientJSON } from './gazetteer.mjs';
 import { tagPieces } from './geotag.mjs';
 import { SITE } from './site.config.mjs';
+import { yearCalendar, fallbackTerms } from './lunar.mjs';
+import { KW_VOCAB, pickEvents } from './kwvocab.mjs';
 import { homePage, scenePage, groupPage, moodPage, authorPage, placePage } from './pages.mjs';
 import { scenesIndexPage, moodsIndexPage, authorsIndexPage, placesIndexPage, allPage, searchPage, aboutPage } from './pages2.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
-const OUT = path.join(ROOT, process.env.BUILD_OUT || 'site');
+const OUT = path.join(ROOT, process.env.BUILD_OUT || 'WWW');
 
 const written = new Set();
 function write(rel, html) {
@@ -73,6 +75,7 @@ const D = await loadAll();
 // 地名自动标注：扫「出处/题目」得题咏地(gw)，扫「正文」得描写地(gd)
 const geoStat = tagPieces(D.pieces);
 console.log(geoStat.report());
+if (D.mergedDups) console.log(`  重复正文已合并 ${D.mergedDups} 组（标签并入先收录条目）`);
 
 fs.mkdirSync(OUT, { recursive: true });
 
@@ -105,10 +108,10 @@ copyDir(path.join(ROOT, 'assets'), path.join(OUT, 'assets'));
   }
 })(path.join(OUT, 'assets'));
 
-// 搜索索引（精简字段，压体积）
+// 搜索索引（精简字段，压体积；m/o 等只在服务端渲染用，不下发）
 const index = D.pieces.map(p => ({
   i: p.id, t: p.t, a: p.a, w: p.w || '', d: p.d || '',
-  s: p.s, m: p.m, pl: p.pl || [], o: p.origin, l: p.len, n: p.n || '',
+  s: p.s, pl: p.pl || [], l: p.len, n: p.n || '',
   fo: p.o || '', x: p.x || '',
   gw: p.gw || [], gd: p.gd || [],
   k: [...p.s.map(id => D.sceneMap[id]).filter(Boolean).flatMap(x => [x.name, ...(x.kw || [])]),
@@ -130,6 +133,34 @@ write('data/index.json', JSON.stringify(dataPayload));
 const mpBuf = msgpack.encode(dataPayload);
 write('data/pieces.msgpack', mpBuf);
 console.log(`  MessagePack ${mpBuf.length} 字节（约等于 JSON ${Buffer.byteLength(JSON.stringify(dataPayload))} 字节的 ${Math.round(mpBuf.length / Buffer.byteLength(JSON.stringify(dataPayload)) * 100)}%）`);
+
+// ── 今日版块数据：节日/节气日历（预推 16 年）+ 历史上的今天 ──
+const rawHistPath = path.join(ROOT, 'data', 'history-raw.json');
+if (fs.existsSync(rawHistPath)) {
+  const raw = JSON.parse(fs.readFileSync(rawHistPath, 'utf8'));
+  const THIS_YEAR = new Date().getFullYear();
+  const years = {};
+  for (let y = THIS_YEAR; y <= THIS_YEAR + 15; y++) years[y] = yearCalendar(y);
+  const days = {};
+  let evTotal = 0, kwHits = 0;
+  for (const [mmdd, events] of Object.entries(raw.days || {})) {
+    const picked = pickEvents(events, KW_VOCAB, 6);
+    days[mmdd] = picked;
+    evTotal += picked.length;
+    kwHits += picked.filter(e => e.kw.length).length;
+  }
+  const histPayload = {
+    built: new Date().toISOString().slice(0, 10),
+    source: raw.source || '',
+    years,                 // { "2026": { "0217": {n,kind,s,scenes,kw}, ... } }
+    terms: fallbackTerms(THIS_YEAR), // 超出预推年份时的节气兜底
+    days                   // { "0804": [ {y,t,kw}, ... ] }
+  };
+  write('data/history.json', JSON.stringify(histPayload));
+  console.log(`  历史上的今天：${Object.keys(days).length} 天 · ${evTotal} 条 · ${kwHits} 条可关联词句`);
+} else {
+  console.warn('  ⚠ 未找到 data/history-raw.json，「今日」版块无历史事件（可用 node build/fetch-history.mjs 生成）');
+}
 
 // GitHub Pages / SEO 辅助文件
 write('.nojekyll', '');

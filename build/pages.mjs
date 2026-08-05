@@ -1,5 +1,5 @@
-import { layout, card, cardList, filterBar, nearMeBlock } from './templates.mjs';
-import { esc, rel, tierLabel } from './util.mjs';
+import { layout, card, cardList, cardListByScene, filterBar } from './templates.mjs';
+import { esc } from './util.mjs';
 import { SITE } from './site.config.mjs';
 
 const R1 = '../', R2 = '../../';
@@ -7,26 +7,30 @@ const R1 = '../', R2 = '../../';
 /* ── 首页 ───────────────────────────────────── */
 export function homePage(D) {
   const R = './';
-  const hot = ['dengding','fangbang','kuanian','songbie','xiangnian','jiaban','biye','chuxue','fangxia','yigeren','wangjiang','shengri'];
+  // 服务端只兜底渲染常驻的常用提示词；首页加载后 app.js 会按当天日期重排（时令 + 常用）
+  const staples = ['jiaban', 'xiangnian', 'yigeren', 'shengri'];
   const hero = `<section class="hero">
   <div class="wrap">
     <h1>此刻，说句好的</h1>
-    <p class="hero-sub">爬上山顶、查到分数、送人走、深夜还在加班——那些说不出口的时刻，这里有现成的一句。<br>共收录 <b>${D.pieces.length}</b> 条词句，铺在 <b>${D.scenes.length}</b> 个具体场景里。</p>
-    <form class="hero-search" action="${R}search/" method="get">
-      <input type="search" name="q" placeholder="你现在是什么处境？比如：下雪、落榜、想家" aria-label="搜索词句">
-      <button type="submit">找一句</button>
-    </form>
-    <div class="hero-hot">
-      ${hot.map(id => D.sceneMap[id] ? `<a href="${R}s/${id}/">${esc(D.sceneMap[id].name)}</a>` : '').join('')}
+    <p class="hero-sub">那些说不出口的时刻，这里有现成的一句。</p>
+    <div class="hero-search-wrap" data-nearme>
+      <form class="hero-search" action="${R}search/" method="get">
+        <input type="search" name="q" placeholder="你现在是什么处境？" aria-label="搜索词句">
+        <button type="submit">找一句</button>
+        <button type="button" class="hs-geo" data-geo-btn title="按你所在的地方找诗句" aria-label="按地点找诗句">📍</button>
+      </form>
+      <div class="nm-out" data-geo-out></div>
     </div>
-    <p class="hero-random"><button data-random>随便来一句</button></p>
+    <div class="hero-hot">
+      ${staples.map(id => D.sceneMap[id] ? `<a href="${R}s/${id}/">${esc(D.sceneMap[id].name)}</a>` : '').join('')}
+      <button class="hot-random" type="button" data-random>随便来一句</button>
+    </div>
     <div class="random-box" data-random-box hidden></div>
+    <section class="today" data-today hidden></section>
   </div>
 </section>`;
 
   const content = `<div class="wrap">
-${nearMeBlock({ compact: true })}
-
 ${D.scenesByGroup.map(g => `<section class="g-block">
   <h2 class="g-title"><a href="${R}g/${g.id}/">${esc(g.name)}</a><span>${esc(g.tag)}</span></h2>
   <div class="s-grid">
@@ -154,7 +158,7 @@ export function moodPage(D, m) {
 </section>`;
   const content = `<div class="wrap">
   ${filterBar(null, D.places)}
-  ${cardList(list, R2)}
+  ${cardListByScene(list, D, R2)}
   <section class="also">
     <h2>换个心情</h2>
     <div class="also-list">${D.moods.filter(x => x.id !== m.id).map(x => `<a href="${R2}m/${x.id}/">${esc(x.name)}<em>${D.byMoodMap[x.id].length}</em></a>`).join('')}</div>
@@ -177,7 +181,7 @@ export function authorPage(D, a) {
 </section>`;
   const content = `<div class="wrap">
   ${filterBar(null, D.places)}
-  ${cardList(list, R2)}
+  ${cardListByScene(list, D, R2)}
 </div>`;
   const jsonld = {
     '@context': 'https://schema.org', '@type': 'ProfilePage',
@@ -201,7 +205,7 @@ export function placePage(D, pl) {
 </section>`;
   const content = `<div class="wrap">
   ${filterBar(null)}
-  ${cardList(list, R2, { showScenes: true })}
+  ${cardListByScene(list, D, R2, { showScenes: true })}
   <section class="also">
     <h2>换个地点</h2>
     <div class="also-list">${D.places.filter(x => x.id !== pl.id).map(x => `<a href="${R2}p/${x.id}/">${esc(x.name)}<em>${D.byPlaceMap[x.id].length}</em></a>`).join('')}</div>

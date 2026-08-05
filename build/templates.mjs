@@ -113,10 +113,11 @@ export function nearMeBlock({ compact = false } = {}) {
   </section>`;
 }
 
-export function card(p, R, { showScenes = true } = {}) {
+export function card(p, R, { showScenes = true, idSuffix = '' } = {}) {
   const tier = lengthTier(p.t);
   const src = [p.a, p.w ? `《${p.w}》` : ''].filter(Boolean).join(' ');
-  return `<article class="q" data-tier="${tier}" data-len="${charLen(p.t)}" data-origin="${p.origin}" data-moods="${(p.m || []).join(' ')}" data-scenes="${(p.s || []).join(' ')}" data-places="${(p.pl || []).join(' ')}" id="q-${p.id}">
+  const cid = 'q-' + p.id + (idSuffix ? '-' + idSuffix : '');
+  return `<article class="q" id="${cid}" data-pid="${p.id}" data-tier="${tier}" data-len="${charLen(p.t)}" data-origin="${p.origin}" data-moods="${(p.m || []).join(' ')}" data-scenes="${(p.s || []).join(' ')}" data-places="${(p.pl || []).join(' ')}">
   <blockquote class="q-text">${esc(p.t)}</blockquote>
   ${p.o ? `<p class="q-o">${esc(p.o)}</p>` : ''}
   ${p.x ? `<p class="q-x">${esc(p.x)}</p>` : ''}
@@ -138,6 +139,41 @@ export function card(p, R, { showScenes = true } = {}) {
 export function cardList(list, R, opts) {
   if (!list.length) return `<p class="empty">这个场景还没有收录，正在补。</p>`;
   return `<div class="q-list">${list.map(p => card(p, R, opts)).join('')}</div>`;
+}
+
+// 在「心情 / 地点 / 作者」页里，把词句按场景分组，方便用户直奔某个处境。
+// 一条词可属多个场景 → 会在多个分组里都出现（id 加场景后缀保证唯一）；
+// 组内仍按从短到长排列，分组顺序沿用站点场景体系。
+export function cardListByScene(list, D, R, opts) {
+  if (!list.length) return `<p class="empty">这个分类还没有收录，正在补。</p>`;
+  const byScene = new Map();
+  for (const p of list) {
+    for (const sid of (p.s || [])) {
+      if (!D.sceneMap[sid]) continue;
+      if (!byScene.has(sid)) byScene.set(sid, []);
+      byScene.get(sid).push(p);
+    }
+  }
+  const groups = [];
+  for (const s of D.scenes) {
+    const items = byScene.get(s.id);
+    if (!items || !items.length) continue;
+    items.sort((a, b) => a.len - b.len);
+    groups.push({ s, items, key: s.id });
+  }
+  // 兜底：极少数不带任何合法场景的词句，归到「其他」
+  const rest = list.filter(p => !(p.s || []).some(sid => D.sceneMap[sid]));
+  if (rest.length) groups.push({ s: { id: '', name: '其他' }, items: rest.slice().sort((a, b) => a.len - b.len), key: 'other' });
+  if (!groups.length) return `<p class="empty">这个分类还没有收录，正在补。</p>`;
+  return `<div class="q-groups">` + groups.map(({ s, items, key }) => {
+    const title = s.id
+      ? `<a href="${R}s/${s.id}/">${esc(s.name)}</a><em>${items.length}</em>`
+      : `<span>${esc(s.name)}</span><em>${items.length}</em>`;
+    return `<section class="q-group" data-group="${key}">
+      <h3 class="q-group-title">${title}</h3>
+      ${cardList(items, R, { ...opts, showScenes: false, idSuffix: key })}
+    </section>`;
+  }).join('') + `</div>`;
 }
 
 // 筛选条

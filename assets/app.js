@@ -87,6 +87,7 @@
     var cards = $$('.q');
     var countEl = $('[data-count]');
     function apply() {
+      var seen = Object.create(null);
       var n = 0;
       cards.forEach(function (c) {
         var ok = (!state.tier || c.dataset.tier === state.tier)
@@ -94,7 +95,12 @@
           && (!state.mood || (' ' + c.dataset.moods + ' ').indexOf(' ' + state.mood + ' ') > -1)
           && (!state.place || (' ' + (c.dataset.places || '') + ' ').indexOf(' ' + state.place + ' ') > -1);
         c.classList.toggle('hide', !ok);
-        if (ok) n++;
+        // 同一条词句可能出现在多个场景分组里 → 计数按 pid 去重，避免「共 N 句」虚高
+        if (ok) { var pid = c.dataset.pid; if (!seen[pid]) { seen[pid] = 1; n++; } }
+      });
+      // 筛选后若某场景分组被筛空，连标题一起隐藏
+      $$('.q-group').forEach(function (g) {
+        g.classList.toggle('hide', !g.querySelector('.q:not(.hide)'));
       });
       if (countEl) countEl.textContent = n;
     }
@@ -195,7 +201,273 @@
     var t;
     input.addEventListener('input', function () { clearTimeout(t); t = setTimeout(run, 180); });
     if (input.value) run();
-  })();
+    })();
+
+    /* ── 今日 · 这一天在历史上 + 节日/节气 + 配几句词句 ── */
+    var SEASON_SCENES = {
+      spring: ['chuchun', 'chunhua', 'songchun', 'jiangnan'],
+      summer: ['chengxia', 'tinghe', 'jiangnan', 'yutian'],
+      autumn: ['qiuyi', 'yexing', 'rilo', 'guancha'],
+      winter: ['chuxue', 'handong', 'mianhua']
+    };
+    var SEASON_KW = {
+      spring: ['春', '花', '柳', '燕', '莺', '桃', '杏', '草', '绿', '风'],
+      summer: ['夏', '暑', '荷', '蝉', '凉', '扇', '蛙', '雷', '骤雨', '荔枝', '瓜'],
+      autumn: ['秋', '月', '霜', '枫', '菊', '雁', '桂', '梧', '黄叶', '愁'],
+      winter: ['雪', '寒', '梅', '炉', '冬', '冰', '炭', '腊', '岁暮']
+    };
+    var SEASON_LABEL = { spring: '春日', summer: '夏日', autumn: '秋日', winter: '冬日' };
+    var WEEK = ['日', '一', '二', '三', '四', '五', '六'];
+
+    function seasonByMonth(m) {
+      return (m >= 3 && m <= 5) ? 'spring' : (m >= 6 && m <= 8) ? 'summer' : (m >= 9 && m <= 11) ? 'autumn' : 'winter';
+    }
+
+    var _hist = null;
+    function fetchHistory() {
+      if (_hist) return _hist;
+      _hist = fetch(baseHref() + 'data/history.json').then(function (r) {
+        if (!r.ok) throw new Error('no history');
+        return r.json();
+      });
+      return _hist;
+    }
+
+    // 主题：先查当年日历（节日/节气，构建期已预推多年），再兜底时令
+    function todayTheme(hist, y, mmdd, month) {
+      var cal = (hist && hist.years) ? hist.years[y] : null;
+      if (cal && cal[mmdd]) {
+        var f = cal[mmdd];
+        return { n: f.n, kind: f.kind || '节日', scenes: f.scenes || [], kw: f.kw || [], s: f.s };
+      }
+      if (hist && hist.terms && hist.terms[mmdd]) {
+        var t = hist.terms[mmdd];
+        return { n: t.n, kind: '节气', scenes: [], kw: [], s: t.s };
+      }
+      var s = seasonByMonth(month);
+      return { n: SEASON_LABEL[s], kind: '时令', scenes: [], kw: [], s: s };
+    }
+    function collectPieces(theme, data) {
+      var seen = {}, out = [];
+      function add(p) { if (p && !seen[p.i]) { seen[p.i] = 1; out.push(p); } }
+      (theme.scenes || []).forEach(function (sid) {
+        data.pieces.forEach(function (p) { if (p.s.indexOf(sid) > -1) add(p); });
+      });
+      (theme.kw || []).forEach(function (kw) {
+        data.pieces.forEach(function (p) { if (p.t.indexOf(kw) > -1) add(p); });
+      });
+      if (out.length < 4 && theme.s) {
+        (SEASON_SCENES[theme.s] || []).forEach(function (sid) {
+          data.pieces.forEach(function (p) { if (p.s.indexOf(sid) > -1) add(p); });
+        });
+      }
+      if (!out.length) return out;
+      var sk = (theme.s && SEASON_KW[theme.s]) || [];
+      out.sort(function (a, b) {
+        var sa = 0, sb = 0;
+        (theme.scenes || []).forEach(function (sid) { if (a.s.indexOf(sid) > -1) sa += 100; if (b.s.indexOf(sid) > -1) sb += 100; });
+        (theme.kw || []).forEach(function (kw) { if (a.t.indexOf(kw) > -1) sa += 60; if (b.t.indexOf(kw) > -1) sb += 60; });
+        sk.forEach(function (kw) { if (a.t.indexOf(kw) > -1) sa += 25; if (b.t.indexOf(kw) > -1) sb += 25; });
+        sa -= a.l * 0.1; sb -= b.l * 0.1;
+        return sb - sa || a.l - b.l;
+      });
+      return out.slice(0, 8);
+    }
+    // 历史事件 → 词句：事件自带构建期算好的关键词。一次扫描同时得出总数与前 cap 条
+    function hitPiece(p, kw) {
+      return (p.t && p.t.indexOf(kw) > -1) || (p.k && p.k.indexOf(kw) > -1);
+    }
+    function eventResults(ev, data, cap) {
+      if (!ev.kw || !ev.kw.length) return { count: 0, list: [] };
+      var count = 0, picked = [];
+      for (var j = 0; j < data.pieces.length; j++) {
+        var p = data.pieces[j], hitN = 0;
+        for (var i = 0; i < ev.kw.length; i++) if (hitPiece(p, ev.kw[i])) hitN++;
+        if (!hitN) continue;
+        count++;
+        if (picked.length < cap) picked.push({ p: p, hit: hitN });
+      }
+      picked.sort(function (a, b) { return b.hit - a.hit || a.p.l - b.p.l; });
+      return { count: count, list: picked.map(function (x) { return x.p; }) };
+    }
+
+    /* ── 提示词按日期排：今日节日/节气 + 时令处境 + 常驻常用 ── */
+    var CHIP_CAL = [
+      { f: '0101', t: '0105', ids: ['kuanian', 'yanhuo', 'jijie'] },          // 新年余温
+      { f: '0106', t: '0228', ids: ['chuxue', 'handong', 'mianhua'] },        // 深冬
+      { f: '0301', t: '0415', ids: ['chuchun', 'chunhua', 'jiangnan'] },      // 春来了
+      { f: '0401', t: '0410', ids: ['qingming', 'daonian'] },                 // 清明前后
+      { f: '0416', t: '0531', ids: ['songchun', 'xianju', 'xingzou'] },       // 暮春
+      { f: '0520', t: '0715', ids: ['biye', 'songbie', 'tongchuang'] },       // 毕业季
+      { f: '0615', t: '0810', ids: ['fangbang', 'dengding', 'luobang'] },     // 放榜季
+      { f: '0601', t: '0831', ids: ['chengxia', 'tinghe', 'yutian', 'kanhai'] }, // 盛夏
+      { f: '0815', t: '0920', ids: ['kaoyan', 'dushu', 'shaonian'] },         // 开学季
+      { f: '0901', t: '1031', ids: ['qiuyi', 'yeshi', 'huaiwu'] },            // 秋
+      { f: '1101', t: '1219', ids: ['handong', 'jijie', 'chuxue'] },          // 入冬
+      { f: '1220', t: '1231', ids: ['kuanian', 'shousui', 'yanhuo'] }         // 年关
+    ];
+    var THEME_CHIPS = {
+      '元旦': ['kuanian', 'yanhuo'], '春节': ['kuanian', 'yanhuo', 'shousui'], '除夕': ['shousui', 'kuanian'],
+      '小年': ['kuanian'], '腊八': ['chihe'], '元宵节': ['yanhuo'], '龙抬头': ['chuchun'],
+      '情人节': ['biaobai', 'relian'], '七夕': ['anlian', 'biaobai', 'relian'],
+      '清明节': ['qingming', 'daonian'], '劳动节': ['jianchi'], '青年节': ['shaonian', 'chufa'],
+      '儿童节': ['tongnian'], '母亲节': ['fumu', 'xiangnian'], '父亲节': ['fumu'],
+      '世界读书日': ['dushu'], '教师节': ['dushu', 'zhiji'], '国庆节': ['lvxing', 'huaiwu'],
+      '中秋节': ['zhongqiu', 'yexing', 'sixiang'], '重阳节': ['chongyang', 'dengding'], '中元节': ['zhongyuan', 'meng'],
+      '平安夜': ['anjing'], '圣诞节': ['chuxue'], '跨年夜': ['kuanian', 'yanhuo'],
+      '立春': ['chuchun'], '雨水': ['yutian'], '惊蛰': ['chuchun'], '春分': ['chunhua'], '谷雨': ['chunhua'],
+      '立夏': ['chengxia'], '小满': ['chengxia'], '芒种': ['guyuan'], '夏至': ['chengxia', 'yexing'],
+      '小暑': ['chengxia', 'tinghe'], '大暑': ['chengxia', 'tinghe', 'yutian'],
+      '立秋': ['qiuyi', 'jijie'], '处暑': ['qiuyi'], '白露': ['qiuyi', 'yeshi'], '秋分': ['qiuyi'],
+      '寒露': ['qiuyi'], '霜降': ['qiuyi', 'mianhua'],
+      '立冬': ['handong'], '小雪': ['chuxue'], '大雪': ['chuxue', 'mianhua'], '冬至': ['handong', 'chihe']
+    };
+    function dateChipIds(data, theme, mmdd, cap) {
+      var smap = {};
+      (data.scenes || []).forEach(function (s) { smap[s.id] = s.name; });
+      var picked = [];
+      function push(id) { if (smap[id] && picked.indexOf(id) < 0 && picked.length < cap) picked.push(id); }
+      if (theme && THEME_CHIPS[theme.n]) THEME_CHIPS[theme.n].forEach(push);
+      CHIP_CAL.forEach(function (r) { if (r.f <= mmdd && mmdd <= r.t) r.ids.forEach(push); });
+      ['jiaban', 'xiangnian', 'yigeren', 'shengri'].forEach(push);
+      return { ids: picked, smap: smap };
+    }
+    function shortName(name) { return name.split(/[、·，]/)[0]; }
+    function todayMMDD(now) { return ('0' + (now.getMonth() + 1)).slice(-2) + ('0' + now.getDate()).slice(-2); }
+    function paintHotChips(data, theme, mmdd) {
+      var bar = $('.hero-hot'); if (!bar) return;
+      var r = dateChipIds(data, theme, mmdd, 10);
+      if (r.ids.length < 3) return; // 数据异常时保留服务端渲染的兜底提示词
+      var R = baseHref();
+      bar.innerHTML = r.ids.map(function (id) { return '<a href="' + R + 's/' + id + '/">' + esc(r.smap[id]) + '</a>'; }).join('')
+        + '<button class="hot-random" type="button" data-random>随便来一句</button>';
+      var q = $('.hero-search input[name="q"]');
+      if (q) q.placeholder = '你现在是什么处境？' + r.ids.slice(0, 4).map(function (id) { return shortName(r.smap[id]); }).join('、') + '…';
+    }
+
+    /* ── 搜索页：「试试」提示词与占位提示也按今天的日期换 ── */
+    (function searchHints() {
+      var hint = $('.s-hint'), q = $('#q');
+      if (!hint && !q) return;
+      Promise.all([fetchIndex(), fetchHistory().catch(function () { return null; })]).then(function (res) {
+        var data = res[0], hist = res[1];
+        var now = new Date();
+        var mmdd = todayMMDD(now);
+        var theme = todayTheme(hist, now.getFullYear(), mmdd, now.getMonth() + 1);
+        var r = dateChipIds(data, theme, mmdd, 8);
+        if (r.ids.length < 3) return;
+        if (hint) {
+          hint.innerHTML = '试试：' + r.ids.map(function (id) {
+            return '<button class="chip" data-fill="' + esc(r.smap[id]) + '">' + esc(r.smap[id]) + '</button>';
+          }).join('');
+        }
+        if (q) {
+          q.placeholder = '比如：' + r.ids.slice(0, 4).map(function (id) { return shortName(r.smap[id]); }).join(' / ') + ' / 想家';
+        }
+      }).catch(function () {});
+    })();
+
+    (function today() {
+      var box = $('[data-today]'); if (!box) return;
+      Promise.all([fetchIndex(), fetchHistory().catch(function () { return null; })]).then(function (res) {
+        var data = res[0], hist = res[1];
+        var now = new Date();
+        var y = now.getFullYear();
+        var mmdd = ('0' + (now.getMonth() + 1)).slice(-2) + ('0' + now.getDate()).slice(-2);
+        var theme = todayTheme(hist, y, mmdd, now.getMonth() + 1);
+        paintHotChips(data, theme, mmdd);
+        var events = ((hist && hist.days) ? hist.days[mmdd] : null) || [];
+
+        // 每个事件算出可配词句（总数 + 前 16 条），能配句的排前面
+        var ranked = events.map(function (ev) {
+          var r = eventResults(ev, data, 16);
+          return { ev: ev, mc: r.count, list: r.list };
+        }).sort(function (a, b) { return (b.mc > 0 ? 1 : 0) - (a.mc > 0 ? 1 : 0) || a.ev.y - b.ev.y; });
+        var showEv = ranked.slice(0, 4);
+
+        var themeP = collectPieces(theme, data);
+        var seen = {}, all = [];
+        themeP.forEach(function (p) { if (!seen[p.i]) { seen[p.i] = 1; all.push(p); } });
+        showEv.forEach(function (e) { e.list.forEach(function (p) { if (!seen[p.i]) { seen[p.i] = 1; all.push(p); } }); });
+        all = all.slice(0, 16);
+        if (!all.length && !showEv.length) { box.hidden = true; return; }
+
+        var R = baseHref();
+        var head = '<div class="t-head"><h2>今日 <span class="t-date">' + (now.getMonth() + 1) + '月' + now.getDate() + '日 · 星期' + WEEK[now.getDay()] + '</span></h2>'
+          + '<span class="t-tag">' + theme.kind + '·' + esc(theme.n) + '</span></div>';
+        var evHtml = '';
+        if (showEv.length) {
+          evHtml = '<div class="t-sub-title">历史上的今天</div><ul class="t-events">'
+            + showEv.map(function (e, i) {
+              var click = e.mc > 0;
+              return '<li' + (click ? ' class="t-ev-link" role="button" tabindex="0"' : '') + ' data-ev="' + i + '">'
+                + '<b>' + e.ev.y + '</b><span>' + esc(e.ev.t) + '</span>'
+                + (click ? '<em>可配 ' + e.mc + ' 句 ▸</em>' : '') + '</li>';
+            }).join('')
+            + '</ul>';
+        }
+        var phHtml = '';
+        if (all.length) {
+          phHtml = '<div class="t-sub-title" data-today-label>此日此句</div><div class="q-list" data-today-list></div>'
+            + '<div class="t-foot"><button type="button" data-today-next>换一批</button><span class="t-page" data-today-page></span>'
+            + '<button type="button" class="t-back" data-today-back hidden>← 返回全部</button></div>';
+        }
+        box.innerHTML = head + evHtml + phHtml;
+        box.hidden = false;
+        if (!all.length) return;
+
+        var PAGE = 4, cur = 0, mode = -1; // mode=-1 全部，>=0 选中事件下标
+        var listEl = box.querySelector('[data-today-list]');
+        var labelEl = box.querySelector('[data-today-label]');
+        var nextBtn = box.querySelector('[data-today-next]');
+        var backBtn = box.querySelector('[data-today-back]');
+        var pageEl = box.querySelector('[data-today-page]');
+        var evEls = $$('.t-events li', box);
+        function activeList() { return mode < 0 ? all : (showEv[mode].list || []); }
+        function paint() {
+          var list = activeList();
+          var pages = Math.max(1, Math.ceil(list.length / PAGE));
+          if (cur >= pages) cur = 0;
+          listEl.innerHTML = list.slice(cur * PAGE, cur * PAGE + PAGE).map(function (p) { return renderCard(p, R); }).join('');
+          if (pageEl) pageEl.textContent = pages > 1 ? ((cur + 1) + ' / ' + pages) : '';
+          if (nextBtn) nextBtn.hidden = pages <= 1;
+        }
+        function setMode(idx) {
+          mode = idx; cur = 0;
+          evEls.forEach(function (el, i) { el.classList.toggle('on', i === idx); });
+          if (idx < 0) {
+            labelEl.textContent = '此日此句';
+            backBtn.hidden = true;
+          } else {
+            var e = showEv[idx];
+            labelEl.textContent = '为「' + e.ev.y + '年·' + e.ev.t + '」配的句子';
+            backBtn.hidden = false;
+          }
+          paint();
+        }
+        box.addEventListener('click', function (e) {
+          var li = e.target.closest('[data-ev]');
+          if (li && li.classList.contains('t-ev-link')) {
+            var idx = Number(li.getAttribute('data-ev'));
+            if (!showEv[idx] || !showEv[idx].list.length) return;
+            setMode(mode === idx ? -1 : idx);
+            if (mode >= 0) labelEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            return;
+          }
+          if (e.target.closest('[data-today-back]')) { setMode(-1); return; }
+          if (e.target.closest('[data-today-next]')) {
+            var pages = Math.max(1, Math.ceil(activeList().length / PAGE));
+            cur = (cur + 1) % pages; paint();
+          }
+        });
+        box.addEventListener('keydown', function (e) {
+          if (e.key !== 'Enter' && e.key !== ' ') return;
+          var li = e.target.closest ? e.target.closest('[data-ev]') : null;
+          if (li && li.classList.contains('t-ev-link')) { e.preventDefault(); li.click(); }
+        });
+        setMode(-1);
+      }).catch(function () { box.hidden = true; });
+    })();
 
 
     /* ── 安装到主屏提示（App 体验）── */
@@ -254,6 +526,7 @@
       var btn = box.querySelector('[data-geo-btn]');
       var out = box.querySelector('[data-geo-out]');
       if (!btn || !out) return;
+      var origLabel = btn.textContent;
 
       function haversine(lat1, lng1, lat2, lng2) {
         var R = 6371, toRad = Math.PI / 180;
@@ -279,7 +552,7 @@
       ];
       var PER_SPOT = 24, MAX_SPOTS = 14, REGION_CAP = 36;
 
-      function resetBtn() { btn.disabled = false; btn.textContent = '获取我的位置'; }
+      function resetBtn() { btn.disabled = false; btn.textContent = origLabel; }
 
       function run(lat, lng) {
         btn.disabled = true; btn.textContent = '定位中…';
@@ -405,7 +678,7 @@
         navigator.geolocation.getCurrentPosition(function (pos) {
           run(pos.coords.latitude, pos.coords.longitude);
         }, function (err) {
-          btn.disabled = false; btn.textContent = '获取我的位置';
+          btn.disabled = false; btn.textContent = origLabel;
           var msg = '没能获取到你的位置。';
           if (err && err.code === err.PERMISSION_DENIED) msg = '你拒绝了定位授权，没法按地点找。';
           else if (err && err.code === err.TIMEOUT) msg = '定位超时了，换个开阔的地方再试。';

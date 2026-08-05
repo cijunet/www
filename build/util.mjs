@@ -23,6 +23,22 @@ export const authorSlugTable = {
   '茅盾': 'maodun', '冰心': 'bingxin', '梁实秋': 'liangshiqiu', '周作人': 'zhouzuoren', '陈寅恪': 'chenyinke'
 };
 
+// 作者名归一：同人异名 / 书名号变体 → 统一写法，避免同一作者被拆成多个作者页
+export const authorAlias = {
+  '荀况': '荀子',
+  '庄周': '庄子',
+  '《诗经》': '诗经',
+  '孔丘': '孔子',
+  '李耳': '老子',
+  '孟轲': '孟子',
+  '陶潜': '陶渊明',
+  '苏东坡': '苏轼',
+  '纳兰容若': '纳兰性德',
+  '诸葛孔明': '诸葛亮',
+  '韩非子': '韩非',
+  '无名氏': '佚名'
+};
+
 // 外文作者用姓名转写
 export function slugify(name, table = {}) {
   if (!name) return 'unknown';
@@ -46,8 +62,6 @@ export function esc(s = '') {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
-
-export function attr(s = '') { return esc(s); }
 
 // 去掉标点，用于纯文本摘要 / 字数统计
 export function plain(s = '') {
