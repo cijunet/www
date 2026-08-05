@@ -22,3 +22,6 @@ dist6/
 WWW_preview/
 WWW_preview2/
 site_bak_*/
+
+# 运行期生成的抓取缓存（由 build/fetch-history.mjs 产出，可重新生成）
+data/history-raw.json
