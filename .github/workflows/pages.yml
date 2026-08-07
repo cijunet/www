@@ -28,8 +28,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Quality gate + build site
-        run: npm run ci
+      - name: Audit data quality
+        run: node build/audit.mjs
+      - name: Unit tests
+        run: node --test build/ciju.test.mjs
+      - name: Build static site
+        run: node build/build.mjs
+      - name: Frontend headless test
+        run: node build/front.test.mjs
+      - name: Check build output
+        run: node build/check.mjs
+      - name: Write data fingerprint
+        run: node build/fingerprint.mjs
 
       - name: Ensure custom domain CNAME
         run: echo "ciju.net" > WWW/CNAME
