@@ -1,7 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 import msgpack from 'msgpack-lite';
+import { encrypt } from './crypto.mjs';
 import { loadAll } from './load.mjs';
 import { GAZETTEER, geoClientJSON } from './gazetteer.mjs';
 import { tagPieces } from './geotag.mjs';
@@ -144,12 +146,13 @@ const dataPayload = {
   geo: geoClientJSON(),
   pieces: index
 };
-write('data/index.json', JSON.stringify(dataPayload));
-
-// MessagePack 二进制（网站运行时优先加载，体积更小、解析更快）
+// MessagePack 二进制 + 轻量加密（网站运行时优先加载，体积更小、解析更快，且不直接暴露明文）
 const mpBuf = msgpack.encode(dataPayload);
-write('data/pieces.msgpack', mpBuf);
-console.log(`  MessagePack ${mpBuf.length} 字节（约等于 JSON ${Buffer.byteLength(JSON.stringify(dataPayload))} 字节的 ${Math.round(mpBuf.length / Buffer.byteLength(JSON.stringify(dataPayload)) * 100)}%）`);
+const encBuf = encrypt(mpBuf);
+write('data/pieces.msgpack.enc', encBuf);
+// 用数据指纹做 Service Worker 缓存版本号（数据变则版本变，自动失效旧缓存）
+const APP_VER = createHash('sha256').update(mpBuf).digest('hex').slice(0, 8);
+console.log(`  MessagePack ${mpBuf.length} 字节 → 加密 ${encBuf.length} 字节（约等于 JSON ${Buffer.byteLength(JSON.stringify(dataPayload))} 字节的 ${Math.round(mpBuf.length / Buffer.byteLength(JSON.stringify(dataPayload)) * 100)}%）`);
 
 // ── 今日版块数据：节日/节气日历（预推 16 年）+ 历史上的今天 ──
 const rawHistPath = path.join(ROOT, 'data', 'history-raw.json');
@@ -184,7 +187,7 @@ write('.nojekyll', '');
 // 自定义域名（GitHub Pages 读取此文件把站点挂到 ciju.net）+ 404 页
 write('CNAME', SITE.origin.replace(/^https?:\/\//, '').replace(/\/$/, ''));
 // Service Worker：让站点具备 App 体验（可安装、可离线、秒开）
-write('sw.js', `const APP='ciju-app-v15';            // 易变的：app.js / style.css / 数据 —— 网络优先，永远取最新
+write('sw.js', `const APP='ciju-app-${APP_VER}';        // 缓存版本：随数据指纹自动变化，旧缓存自动失效（无需手改）
 const SHELL=['./','./index.html','./assets/style.css','./assets/app.js','./assets/msgpack.min.js','./assets/manifest.webmanifest','./assets/icon.svg','./404.html','./scenes/','./moods/','./places/','./authors/','./search/','./about/'];
 self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(APP).then(c=>c.addAll(SHELL).catch(()=>{})).then(()=>true));});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==APP).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
@@ -193,8 +196,14 @@ self.addEventListener('fetch',e=>{
   if(req.method!=='GET')return;
   const url=new URL(req.url);
   if(url.origin!==location.origin)return;
-  // app.js / style.css / 数据 / 页面：网络优先，永远取最新；离线才用缓存
-  e.respondWith(fetch(req).then(r=>{if(r&&r.ok){const cp=r.clone();caches.open(APP).then(c=>c.put(req,cp));}return r;}).catch(()=>caches.match(req).then(m=>m||caches.match('./index.html'))));
+  const cacheFirst=()=>caches.match(req).then(m=>m||fetch(req).then(r=>{if(r&&r.ok){const cp=r.clone();caches.open(APP).then(c=>c.put(req,cp));}return r;}).catch(()=>caches.match('./index.html')));
+  // 数据文件：stale-while-revalidate（先取缓存秒开，后台静默更新）
+  if(url.pathname.indexOf('/data/')>=0){
+    e.respondWith(caches.open(APP).then(async c=>{const cached=await c.match(req);const net=fetch(req).then(r=>{if(r&&r.ok)c.put(req,r.clone());return r;}).catch(()=>cached);return cached||net;}));
+    return;
+  }
+  // 页面与静态资源：cache-first（构建期不可变，版本号已变即换新缓存）
+  e.respondWith(cacheFirst());
 });`);
 write('404.html', `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -262,8 +271,7 @@ ${D.groups.map(g => `- ${g.name}（${g.tag}）：${D.scenesByGroup.find(x => x.i
 - 按心情检索：${base}moods/
 - 按地点检索：${base}places/
 - 按作者检索：${base}authors/
-- 结构化数据（MessagePack，站点运行时加载）：${base}data/pieces.msgpack
-- 结构化数据（JSON，兜底/供程序读取）：${base}data/index.json
+- 结构化数据（二进制加密，站点运行时加载）：${base}data/pieces.msgpack.enc
 `);
 
 const stale = pruneStale(OUT);

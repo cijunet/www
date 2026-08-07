@@ -4,13 +4,12 @@ Thumbs.db
 *.log
 .workbuddy/
 
-# 构建产物（本地用 node build/build.mjs 生成；上传到 GitHub Pages）
+# 构建产物：本地用 node build/build.mjs 生成，提交进仓库由 GitHub Pages 直接部署（CI 改为仅部署）。
+# 仅 WWW/ 入库；其他预览/备份/中间变体仍忽略。
 docs/
-WWW/
 WWW.build/
 WWW2/
 site/
-www/
 www2/
 www3/
 dist/
@@ -23,5 +22,9 @@ WWW_preview/
 WWW_preview2/
 site_bak_*/
 
-# data/history-raw.json 是构建必要输入（今日/历史事件版块依赖它），必须入库；
-# 如需重新抓取用 build/fetch-history.mjs，产出后再提交即可。
+# 数据源（xlsx 与 history-raw.json）仅留本地，绝不进公开仓库
+data/词句数据.xlsx
+data/history-raw.json
+
+# 构建期生成的数据指纹快照（每次构建都变，无需入库）
+data-fingerprint.json

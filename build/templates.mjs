@@ -164,13 +164,19 @@ export function cardListByScene(list, D, R, opts) {
   const rest = list.filter(p => !(p.s || []).some(sid => D.sceneMap[sid]));
   if (rest.length) groups.push({ s: { id: '', name: '其他' }, items: rest.slice().sort((a, b) => a.len - b.len), key: 'other' });
   if (!groups.length) return `<p class="empty">这个分类还没有收录，正在补。</p>`;
+  // 分页/截断：每组最多渲染 CAP 张卡，避免超大全站页（佚名作者页等）HTML 暴涨；
+  // 超出部分数据仍全量存在于 .enc，用户在站内搜索可查到。CAP 可按需调整。
+  const CAP = 300;
   return `<div class="q-groups">` + groups.map(({ s, items, key }) => {
+    const overflow = items.length > CAP ? items.length - CAP : 0;
+    const shown = overflow ? items.slice(0, CAP) : items;
     const title = s.id
       ? `<a href="${R}s/${s.id}/">${esc(s.name)}</a><em>${items.length}</em>`
       : `<span>${esc(s.name)}</span><em>${items.length}</em>`;
     return `<section class="q-group" data-group="${key}">
       <h3 class="q-group-title">${title}</h3>
-      ${cardList(items, R, { ...opts, showScenes: false, idSuffix: key })}
+      ${cardList(shown, R, { ...opts, showScenes: false, idSuffix: key })}
+      ${overflow ? `<p class="q-more">本处境还有 ${overflow} 句已收录进全站数据，可在 <a href="${R}search/">站内搜索</a> 按关键词查看。</p>` : ''}
     </section>`;
   }).join('') + `</div>`;
 }

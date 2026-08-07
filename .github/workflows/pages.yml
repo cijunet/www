@@ -14,48 +14,21 @@ concurrency:
   group: pages
   cancel-in-progress: true
 
+# 构建在本地完成（xlsx 源表仅留本地，不进公开仓库）；CI 仅把已构建好的 WWW/ 部署到 Pages。
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Audit data quality
-        run: node build/audit.mjs
-      - name: Unit tests
-        run: node --test build/ciju.test.mjs
-      - name: Build static site
-        run: node build/build.mjs
-      - name: Frontend headless test
-        run: node build/front.test.mjs
-      - name: Check build output
-        run: node build/check.mjs
-      - name: Write data fingerprint
-        run: node build/fingerprint.mjs
-
-      - name: Ensure custom domain CNAME
-        run: echo "ciju.net" > WWW/CNAME
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: WWW
 
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

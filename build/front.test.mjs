@@ -5,10 +5,11 @@
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import { JQ } from './_jq_data.mjs';
+import { decrypt } from './crypto.mjs';
 const require = createRequire(import.meta.url);
 
 /* ── 1. mock 全局 ── */
-const BUF = fs.readFileSync('WWW/data/pieces.msgpack');
+const ENC = fs.readFileSync('WWW/data/pieces.msgpack.enc'); // 线上部署的密文
 global.window = global;
 // 模拟首页内联注入的节气数据（真实构建由 build/pages.mjs 注入到 index.html）
 global.__JQ_DATA = JQ.map(j => ({ id: j.id, name: j.name, date: j.date, time: j.time, folk: j.folk, proverb: j.proverb, food: j.food }));
@@ -48,7 +49,7 @@ const HIST = fs.existsSync('WWW/data/history.json') ? JSON.parse(fs.readFileSync
 global.fetch = (url) => {
   const u = String(url);
   global.__fetchedUrls.push(u);
-  if (u.includes('msgpack')) return Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve(new Uint8Array(BUF.buffer, BUF.byteOffset, BUF.byteLength)) });
+  if (u.includes('msgpack')) return Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve(new Uint8Array(ENC.buffer, ENC.byteOffset, ENC.byteLength)) });
   if (u.includes('history')) return Promise.resolve({ ok: true, json: () => Promise.resolve(HIST) });
   return Promise.resolve({ ok: true, json: () => Promise.resolve({ pieces: [], scenes: [], moods: [], places: [] }) });
 };
@@ -184,8 +185,8 @@ ok(dataUrls.every(u => /\.\/data\//.test(u) || /^https?:\/\/[^/]+\/data\//.test(
 const bad = dataUrls.filter(u => /(localhost|\d{4}|\.[a-z]+)data\//.test(u));
 ok(bad.length === 0, '无畸形 URL（' + (bad[0] || '无') + '）');
 
-console.log('T6 数据完整性（msgpack 可解码为真实数据）');
-const data = global.msgpack.decode(new Uint8Array(BUF.buffer, BUF.byteOffset, BUF.byteLength));
+console.log('T6 数据完整性（密文可解密并解码为真实数据）');
+const data = global.msgpack.decode(decrypt(ENC));
 ok(data.pieces && data.pieces.length > 10000, '词句 ' + (data.pieces ? data.pieces.length : 0) + ' 条');
 ok(data.scenes && data.scenes.length === 272, '场景 272');
 
