@@ -150,8 +150,15 @@ const dataPayload = {
 const mpBuf = msgpack.encode(dataPayload);
 const encBuf = encrypt(mpBuf);
 write('data/pieces.msgpack.enc', encBuf);
-// 用数据指纹做 Service Worker 缓存版本号（数据变则版本变，自动失效旧缓存）
-const APP_VER = createHash('sha256').update(mpBuf).digest('hex').slice(0, 8);
+// Service Worker 缓存版本号：数据指纹 + 静态资源指纹（app.js / msgpack / style）
+// 关键：以前只哈希数据，导致「改了前端代码而数据没变」时版本号不变，浏览器一直命中旧 app.js 缓存。
+// 现在把前端静态资源也并进哈希，改任意前端文件都会让版本号变化、自动失效旧缓存。
+const shellBuf = Buffer.concat([
+  fs.readFileSync(path.join(ROOT, 'assets', 'app.js')),
+  fs.readFileSync(path.join(ROOT, 'assets', 'msgpack.min.js')),
+  fs.readFileSync(path.join(ROOT, 'assets', 'style.css'))
+]);
+const APP_VER = createHash('sha256').update(mpBuf).update(shellBuf).digest('hex').slice(0, 8);
 console.log(`  MessagePack ${mpBuf.length} 字节 → 加密 ${encBuf.length} 字节（约等于 JSON ${Buffer.byteLength(JSON.stringify(dataPayload))} 字节的 ${Math.round(mpBuf.length / Buffer.byteLength(JSON.stringify(dataPayload)) * 100)}%）`);
 
 // ── 今日版块数据：节日/节气日历（预推 16 年）+ 历史上的今天 ──
@@ -197,12 +204,18 @@ self.addEventListener('fetch',e=>{
   const url=new URL(req.url);
   if(url.origin!==location.origin)return;
   const cacheFirst=()=>caches.match(req).then(m=>m||fetch(req).then(r=>{if(r&&r.ok){const cp=r.clone();caches.open(APP).then(c=>c.put(req,cp));}return r;}).catch(()=>caches.match('./index.html')));
+  const networkFirst=()=>fetch(req).then(r=>{if(r&&r.ok){const cp=r.clone();caches.open(APP).then(c=>c.put(req,cp));}return r;}).catch(()=>caches.match(req).then(m=>m||caches.match('./index.html')));
   // 数据文件：stale-while-revalidate（先取缓存秒开，后台静默更新）
   if(url.pathname.indexOf('/data/')>=0){
     e.respondWith(caches.open(APP).then(async c=>{const cached=await c.match(req);const net=fetch(req).then(r=>{if(r&&r.ok)c.put(req,r.clone());return r;}).catch(()=>cached);return cached||net;}));
     return;
   }
-  // 页面与静态资源：cache-first（构建期不可变，版本号已变即换新缓存）
+  // 前端静态资源（app.js / msgpack / css / 图标）：网络优先——改了代码立刻生效，旧缓存永不挡路；仅离线时回退缓存
+  if(url.pathname.indexOf('/assets/')>=0){
+    e.respondWith(networkFirst());
+    return;
+  }
+  // 页面：cache-first（构建期不可变，版本号已变即换新缓存）
   e.respondWith(cacheFirst());
 });`);
 write('404.html', `<!DOCTYPE html>

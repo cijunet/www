@@ -1,9 +1,10 @@
+/* 数据解密：与 build/crypto.mjs 完全一致的逐字节异或（密钥必须相同）。
+   必须定义在全局作用域——本文件由多个并列(IIFE)模块组成，只有全局函数才能被各模块共享。 */
+var CJU_KEY = new Uint8Array([0x63,0x69,0x6a,0x75,0x2d,0x6e,0x65,0x74,0x2d,0x32,0x30,0x32,0x36,0x6b,0x65,0x79]);
+function cjuDecrypt(buf){ var u = (buf instanceof Uint8Array)?buf:new Uint8Array(buf); var o=new Uint8Array(u.length); for(var i=0;i<u.length;i++) o[i]=u[i]^CJU_KEY[i%CJU_KEY.length]; return o; }
+
 (function () {
   'use strict';
-
-  /* 数据解密：与 build/crypto.mjs 完全一致的逐字节异或（密钥必须相同） */
-  var CJU_KEY = new Uint8Array([0x63,0x69,0x6a,0x75,0x2d,0x6e,0x65,0x74,0x2d,0x32,0x30,0x32,0x36,0x6b,0x65,0x79]);
-  function cjuDecrypt(buf){ var u = (buf instanceof Uint8Array)?buf:new Uint8Array(buf); var o=new Uint8Array(u.length); for(var i=0;i<u.length;i++) o[i]=u[i]^CJU_KEY[i%CJU_KEY.length]; return o; }
 
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
@@ -544,15 +545,23 @@
       try { localStorage.setItem('ciju.install_dismissed', '1'); } catch (e) {}
     });
 
-    /* ── Service Worker：App 离线/秒开 ── */
+    /* ── Service Worker：仅生产环境启用；本地预览禁用，避免旧缓存坑 ── */
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', function () {
-        // 站点根：资源根(assets/)的上一级，绝对地址，子页面/子目录部署都成立
-        var _sheet = document.querySelector('link[rel=stylesheet]').getAttribute('href');
-        var _assetRoot = new URL(_sheet, location.href).href.replace(/style\.css$/, '');
-        var _siteRoot = new URL('..', _assetRoot).href;
-        navigator.serviceWorker.register(_siteRoot + 'sw.js').catch(function () {});
-      });
+      var _isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.hostname === '[::1]';
+      if (_isLocal) {
+        // 本地：注销任何已注册的 SW，保证每次都拉最新文件、永不被旧缓存卡住
+        navigator.serviceWorker.getRegistrations().then(function (regs) {
+          (regs || []).forEach(function (r) { r.unregister(); });
+        }).catch(function () {});
+      } else {
+        window.addEventListener('load', function () {
+          // 站点根：资源根(assets/)的上一级，绝对地址，子页面/子目录部署都成立
+          var _sheet = document.querySelector('link[rel=stylesheet]').getAttribute('href');
+          var _assetRoot = new URL(_sheet, location.href).href.replace(/style\.css$/, '');
+          var _siteRoot = new URL('..', _assetRoot).href;
+          navigator.serviceWorker.register(_siteRoot + 'sw.js').catch(function () {});
+        });
+      }
     }
 
     /* ── 底部标签栏高亮当前页 ── */
