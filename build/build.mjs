@@ -9,18 +9,26 @@ import { SITE } from './site.config.mjs';
 import { yearCalendar, fallbackTerms } from './lunar.mjs';
 import { KW_VOCAB, pickEvents } from './kwvocab.mjs';
 import { homePage, scenePage, groupPage, moodPage, authorPage, placePage } from './pages.mjs';
-import { scenesIndexPage, moodsIndexPage, authorsIndexPage, placesIndexPage, allPage, searchPage, aboutPage } from './pages2.mjs';
+import { scenesIndexPage, moodsIndexPage, authorsIndexPage, placesIndexPage, searchPage, aboutPage } from './pages2.mjs';
+import { jqPage, jqIndexPage } from './jq_pages.mjs';
+import { JQ } from './_jq_data.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
 const OUT = path.join(ROOT, process.env.BUILD_OUT || 'WWW');
 
 const written = new Set();
+let skipped = 0, wrote = 0;
 function write(rel, html) {
   const file = path.join(OUT, rel);
+  written.add(path.resolve(file));
+  // 增量写入：目标已存在且内容一致则跳过（大幅减少小文件 IO）
+  try {
+    if (fs.readFileSync(file, 'utf8') === html) { skipped++; return file; }
+  } catch {}
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, html, 'utf8');
-  written.add(path.resolve(file));
+  wrote++;
   return file;
 }
 
@@ -51,6 +59,14 @@ function copyDir(src, dest) {
 
 const t0 = Date.now();
 const D = await loadAll();
+
+// 站点简介动态化：把全站数据写进 SITE.desc（随数据变化自动更新，用于首页简介/meta/JSON-LD）
+(function buildDesc() {
+  const P = D.pieces;
+  let c = 0, mo = 0, wo = 0;
+  P.forEach(p => { if (p.origin === 'classic') c++; else if (p.origin === 'modern') mo++; else wo++; });
+  SITE.desc = `按此刻的处境找词句。登顶、放榜、送别、深夜加班……${D.scenes.length} 个具体场景、${D.moods.length} 种心情、${D.places.length} 处地点，收录 ${P.length} 条可复制的词句（古典 ${c} · 近现代 ${mo} · 外国 ${wo}），出自 ${D.authors.length} 位古今中外作者，覆盖 24 节气。每一句都标好出处、怎么用、长度与白话译文，支持语音朗读、一键复制，点一下就带走。`;
+})();
 
 // 构建前校验：错位 id / 空场景 / 重复正文 一律告警，避免脏数据静默上线
 (function validate() {
@@ -85,9 +101,10 @@ writePage('scenes', scenesIndexPage(D)); n++;
 writePage('moods', moodsIndexPage(D)); n++;
 writePage('places', placesIndexPage(D)); n++;
 writePage('authors', authorsIndexPage(D)); n++;
-writePage('all', allPage(D)); n++;
 writePage('search', searchPage(D)); n++;
 writePage('about', aboutPage(D)); n++;
+writePage('jq', jqIndexPage(D)); n++;
+for (const j of JQ) { writePage(`jq/${j.id}`, jqPage(D, j)); n++; }
 for (const s of D.scenes) { writePage(`s/${s.id}`, scenePage(D, s)); n++; }
 for (const g of D.groups) { writePage(`g/${g.id}`, groupPage(D, g)); n++; }
 for (const m of D.moods) { writePage(`m/${m.id}`, moodPage(D, m)); n++; }
@@ -167,8 +184,8 @@ write('.nojekyll', '');
 // 自定义域名（GitHub Pages 读取此文件把站点挂到 ciju.net）+ 404 页
 write('CNAME', SITE.origin.replace(/^https?:\/\//, '').replace(/\/$/, ''));
 // Service Worker：让站点具备 App 体验（可安装、可离线、秒开）
-write('sw.js', `const APP='ciju-app-v12';            // 易变的：app.js / style.css / 数据 —— 网络优先，永远取最新
-const SHELL=['/','/index.html','/assets/style.css','/assets/app.js','/assets/msgpack.min.js','/assets/manifest.webmanifest','/assets/icon.svg','/404.html','/scenes/','/moods/','/places/','/authors/','/all/','/search/','/about/'];
+write('sw.js', `const APP='ciju-app-v15';            // 易变的：app.js / style.css / 数据 —— 网络优先，永远取最新
+const SHELL=['./','./index.html','./assets/style.css','./assets/app.js','./assets/msgpack.min.js','./assets/manifest.webmanifest','./assets/icon.svg','./404.html','./scenes/','./moods/','./places/','./authors/','./search/','./about/'];
 self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(APP).then(c=>c.addAll(SHELL).catch(()=>{})).then(()=>true));});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==APP).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
 self.addEventListener('fetch',e=>{
@@ -177,7 +194,7 @@ self.addEventListener('fetch',e=>{
   const url=new URL(req.url);
   if(url.origin!==location.origin)return;
   // app.js / style.css / 数据 / 页面：网络优先，永远取最新；离线才用缓存
-  e.respondWith(fetch(req).then(r=>{if(r&&r.ok){const cp=r.clone();caches.open(APP).then(c=>c.put(req,cp));}return r;}).catch(()=>caches.match(req).then(m=>m||caches.match('/index.html'))));
+  e.respondWith(fetch(req).then(r=>{if(r&&r.ok){const cp=r.clone();caches.open(APP).then(c=>c.put(req,cp));}return r;}).catch(()=>caches.match(req).then(m=>m||caches.match('./index.html'))));
 });`);
 write('404.html', `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -195,7 +212,7 @@ write('404.html', `<!DOCTYPE html>
 <h1>这句，还没收</h1>
 <p class="hero-sub">你要找的那一句，本站暂时没有。<br>不如换个处境翻翻，或者去全站里慢慢找。</p>
 <div class="hero-hot">
-<a href="./">回到首页</a><a href="scenes/">全部场景</a><a href="moods/">按心情找</a><a href="places/">按地点找</a><a href="authors/">按作者找</a><a href="all/">全部词句</a><a href="search/">站内搜索</a>
+<a href="./">回到首页</a><a href="scenes/">全部场景</a><a href="moods/">按心情找</a><a href="places/">按地点找</a><a href="authors/">按作者找</a><a href="search/">站内搜索</a>
 </div>
 </div></section></main>
 <footer class="site-foot"><div class="wrap"><div class="copy">© ${SITE.year} ${SITE.name}</div></div></footer>
@@ -203,7 +220,8 @@ write('404.html', `<!DOCTYPE html>
 </html>`);
 const base = SITE.origin.replace(/\/$/, '') + SITE.base;
 const urls = [
-  '', 'scenes/', 'moods/', 'places/', 'authors/', 'all/', 'search/', 'about/',
+  '', 'scenes/', 'moods/', 'places/', 'authors/', 'search/', 'about/', 'jq/',
+  ...JQ.map(j => `jq/${j.id}/`),
   ...D.scenes.map(s => `s/${s.id}/`),
   ...D.groups.map(g => `g/${g.id}/`),
   ...D.moods.map(m => `m/${m.id}/`),
@@ -244,7 +262,6 @@ ${D.groups.map(g => `- ${g.name}（${g.tag}）：${D.scenesByGroup.find(x => x.i
 - 按心情检索：${base}moods/
 - 按地点检索：${base}places/
 - 按作者检索：${base}authors/
-- 全部词句：${base}all/
 - 结构化数据（MessagePack，站点运行时加载）：${base}data/pieces.msgpack
 - 结构化数据（JSON，兜底/供程序读取）：${base}data/index.json
 `);
@@ -253,7 +270,7 @@ const stale = pruneStale(OUT);
 
 console.log(`\n  ${SITE.name} 构建完成`);
 if (stale) console.log(`  清理陈旧文件 ${stale} 个`);
-console.log(`  页面 ${n} 个 · 词句 ${D.pieces.length} 条 · 场景 ${D.scenes.length} 个 · 作者 ${D.authors.length} 位 · ${Date.now() - t0}ms`);
+console.log(`  页面 ${n} 个 · 词句 ${D.pieces.length} 条 · 场景 ${D.scenes.length} 个 · 作者 ${D.authors.length} 位 · 写入 ${wrote} / 跳过 ${skipped} · ${Date.now() - t0}ms`);
 if (D.warnings.length) {
   console.log(`\n  ⚠ 数据提醒 ${D.warnings.length} 条：`);
   D.warnings.slice(0, 40).forEach(w => console.log('    - ' + w));

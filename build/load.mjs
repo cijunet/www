@@ -11,7 +11,7 @@ const ROOT = path.join(__dirname, '..');
 // 默认读 data/词句数据.xlsx（唯一真源）。可用 CIJU_XLSX 环境变量临时指向其它数据源文件。
 const XLSX_PATH = path.join(ROOT, 'data', process.env.CIJU_XLSX || '词句数据.xlsx');
 
-const CLASSIC_DYN = ['先秦','春秋','战国','汉','三国','晋','南北朝','隋','唐','五代','宋','元','明','清','近代'];
+const CLASSIC_DYN = ['先秦','春秋','战国','秦','汉','西汉','东汉','新','三国','魏','蜀','吴','晋','西晋','东晋','南北朝','南朝','北朝','北魏','南齐','梁','陈','隋','唐','初唐','盛唐','中唐','晚唐','五代','五代十国','宋','北宋','南宋','辽','金','西夏','元','明','清','汉乐府','乐府','近代','魏晋','周','南朝梁','南朝宋','唐宋','北周'];
 
 function originOf(p) {
   const d = p.d || '';
@@ -135,7 +135,8 @@ export async function loadAll() {
     if (seen.has(key)) { mergeTags(seen.get(key), sList, mList, pList); mergedDups++; return; }
     if (!sList.length) warnings.push(`第 ${p._i + 2} 行「${p.t.slice(0, 10)}」没有任何有效场景，不会出现在任何场景页`);
 
-    const author = authorAlias[p.a] || p.a || '佚名';
+    const rawA = String(p.a || '').trim();
+    const author = /^[—-]+$/.test(rawA) ? '佚名' : (authorAlias[rawA] || rawA || '佚名');
     const authorSlug = slugify(author, authorSlugTable);
     const piece = {
       ...p,
@@ -147,6 +148,7 @@ export async function loadAll() {
       pl: pList,
       origin: originOf(p),
       len: charLen(p.t),
+      l: charLen(p.t),   // 长度分级数字：≤12 极短 / ≤28 适中 / >28 偏长（前端 tierOf 读取）
       sceneRefs: sList.map(id => sceneMap[id])
     };
     pieces.push(piece);

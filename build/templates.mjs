@@ -61,7 +61,7 @@ ${hero}
         <a href="${R}moods/">按心情找</a>
         <a href="${R}places/">按地点找</a>
         <a href="${R}authors/">按作者找</a>
-        <a href="${R}all/">全部词句</a>
+        <a href="${R}jq/">二十四节气</a>
       </div>
       <div>
         <b>关于</b>
@@ -70,7 +70,7 @@ ${hero}
         <span class="muted">收录内容多为公有领域作品，近现代及外文引文均标注出处。</span>
       </div>
     </div>
-    <div class="copy">© ${SITE.year} ${esc(SITE.name)}</div>
+    <div class="copy">© ${SITE.year} ${esc(SITE.name)} · ciju.net · 此时此刻，此情此景，说句好的！</div>
   </div>
 </footer>
 <nav class="tabbar" aria-label="底部导航">
@@ -79,7 +79,6 @@ ${hero}
   <a class="tb" data-tb="moods" href="${R}moods/"><span class="tb-ic">☺</span><span>心情</span></a>
   <a class="tb" data-tb="places" href="${R}places/"><span class="tb-ic">⌖</span><span>地点</span></a>
   <a class="tb" data-tb="authors" href="${R}authors/"><span class="tb-ic">✎</span><span>作者</span></a>
-  <a class="tb" data-tb="all" href="${R}all/"><span class="tb-ic">☰</span><span>全部</span></a>
 </nav>
 <script src="${R}assets/msgpack.min.js"></script>
 <script src="${R}assets/app.js" defer></script>
@@ -177,7 +176,7 @@ export function cardListByScene(list, D, R, opts) {
 }
 
 // 筛选条
-export function filterBar(moods, places) {
+export function filterBar(moods) {
   return `<div class="filters" data-filters>
   <div class="f-row">
     <span class="f-label">长度</span>
@@ -197,11 +196,6 @@ export function filterBar(moods, places) {
     <span class="f-label">心情</span>
     <button class="chip on" data-f="mood" data-v="">不限</button>
     ${moods.map(m => `<button class="chip" data-f="mood" data-v="${m.id}">${esc(m.name)}</button>`).join('')}
-  </div>` : ''}
-  ${places && places.length ? `<div class="f-row">
-    <span class="f-label">地点</span>
-    <button class="chip on" data-f="place" data-v="">不限</button>
-    ${places.map(pl => `<button class="chip" data-f="place" data-v="${pl.id}">${esc(pl.name)}</button>`).join('')}
   </div>` : ''}
   <div class="f-count"><span data-count></span> 句</div>
 </div>`;

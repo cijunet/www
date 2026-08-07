@@ -1,12 +1,15 @@
 import { layout, card, cardList, cardListByScene, filterBar } from './templates.mjs';
 import { esc } from './util.mjs';
 import { SITE } from './site.config.mjs';
+import { JQ } from './_jq_data.mjs';
 
 const R1 = '../', R2 = '../../';
 
 /* ── 首页 ───────────────────────────────────── */
 export function homePage(D) {
   const R = './';
+  // 二十四节气文化数据注入（首页"今日"区块用：节气名/日期/三候/民俗/农谚/饮食）
+  const jqScript = `<script>window.__JQ_DATA=${JSON.stringify(JQ.map(j => ({ id: j.id, name: j.name, date: j.date, time: j.time, folk: j.folk, proverb: j.proverb, food: j.food })))}<\/script>`;
   // 服务端只兜底渲染常驻的常用提示词；首页加载后 app.js 会按当天日期重排（时令 + 常用）
   const staples = ['jiaban', 'xiangnian', 'yigeren', 'shengri'];
   const hero = `<section class="hero">
@@ -74,7 +77,7 @@ ${D.scenesByGroup.map(g => `<section class="g-block">
       'query-input': 'required name=search_term_string'
     }
   };
-  return layout({ depth: 0, title: SITE.name, desc: SITE.desc, canonical: '', hero, content, jsonld, bodyClass: 'page-home' });
+  return layout({ depth: 0, title: SITE.name, desc: SITE.desc, canonical: '', hero, content: content + jqScript, jsonld, bodyClass: 'page-home' });
 }
 
 /* ── 场景页 ─────────────────────────────────── */
@@ -83,7 +86,10 @@ export function scenePage(D, s) {
   const g = D.groupMap[s.g];
   const usedMoods = D.moods.filter(m => list.some(p => p.m.includes(m.id)));
   const sibling = D.scenesByGroup.find(x => x.id === s.g).scenes.filter(x => x.id !== s.id);
-  const desc = `${s.name}：${s.desc} 收录 ${list.length} 条可直接使用的词句，标好长度与用法，点一下就复制。`;
+  // 个性化 description：情绪关键词 + 精选句预览（272 页自动差异化）
+  const moodNames = usedMoods.slice(0, 3).map(m => m.name).join('、');
+  const pick = list[0] ? list[0].t.slice(0, 22) + (list[0].t.length > 22 ? '…' : '') : '';
+  const desc = `${s.name}（${s.desc || '此刻的处境'}），适合${moodNames ? moodNames + '等' : ''}时刻引用。收录 ${list.length} 条可直接复制的词句，示例：「${pick}」。`;
 
   const hero = `<section class="page-hero">
   <div class="wrap">
@@ -95,7 +101,7 @@ export function scenePage(D, s) {
 </section>`;
 
   const content = `<div class="wrap">
-  ${filterBar(usedMoods, D.places)}
+  ${filterBar(usedMoods)}
   ${cardList(list, R2, { showScenes: true })}
   <section class="also">
     <h2>同一类里的其他处境</h2>
@@ -157,7 +163,7 @@ export function moodPage(D, m) {
   </div>
 </section>`;
   const content = `<div class="wrap">
-  ${filterBar(null, D.places)}
+  ${filterBar(null)}
   ${cardListByScene(list, D, R2)}
   <section class="also">
     <h2>换个心情</h2>
@@ -172,6 +178,11 @@ export function authorPage(D, a) {
   const list = a.pieces;
   const works = [...new Set(list.map(p => p.w).filter(Boolean))];
   const desc = `${a.name}的 ${list.length} 条名句摘录${works.length ? '，出自《' + works.slice(0, 5).join('》《') + '》等' : ''}，每句标注适用场景。`;
+  // 同时代作者推荐（同年代国别，句数 top 6，过滤佚名与空年代）
+  const sameDyn = (a.d && a.d !== '现代' ? D.authors.filter(x => x.slug !== a.slug && x.d === a.d && x.name !== '佚名').slice(0, 6) : []);
+  const alsoHtml = sameDyn.length ? `<section class="also"><h3>同时代的作者</h3>
+  <div class="a-grid">${sameDyn.map(x => `<a class="a-card" href="${R2}a/${x.slug}/">${esc(x.name)}<em>${x.pieces.length}</em></a>`).join('')}</div>
+</section>` : '';
   const hero = `<section class="page-hero">
   <div class="wrap">
     <nav class="crumb"><a href="${R2}">首页</a> › <a href="${R2}authors/">作者</a> › <span>${esc(a.name)}</span></nav>
@@ -180,8 +191,9 @@ export function authorPage(D, a) {
   </div>
 </section>`;
   const content = `<div class="wrap">
-  ${filterBar(null, D.places)}
+  ${filterBar(null)}
   ${cardListByScene(list, D, R2)}
+  ${alsoHtml}
 </div>`;
   const jsonld = {
     '@context': 'https://schema.org', '@type': 'ProfilePage',

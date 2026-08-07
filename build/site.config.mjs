@@ -15,7 +15,7 @@ export const SITE = {
 
 export const NAV = [
   { href: '', label: '首页' },
-  { href: 'scenes/', label: '全部场景' },
+  { href: 'scenes/', label: '按场景' },
   { href: 'moods/', label: '按心情' },
   { href: 'places/', label: '按地点' },
   { href: 'authors/', label: '按作者' },

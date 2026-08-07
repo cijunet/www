@@ -1,0 +1,27 @@
+{
+  "generatedAt": "2026-08-07T12:50:25.786Z",
+  "totals": {
+    "pieces": 11649,
+    "scenes": 272,
+    "moods": 123,
+    "places": 178,
+    "authors": 1063,
+    "yiming": 3796
+  },
+  "composition": {
+    "classic": 5939,
+    "modern": 4360,
+    "world": 1350,
+    "classicPct": 51
+  },
+  "quality": {
+    "noBaihua": 0,
+    "noNote": 0,
+    "noScene": 0,
+    "noWork": 3788,
+    "worldNoOriginal": 379,
+    "thinScenes20": 0,
+    "warnings": 0
+  },
+  "fingerprint": "d3bdc38f64c334a3"
+}

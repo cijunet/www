@@ -3,6 +3,10 @@
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
 
+  /* 页面加载位置固定：禁止浏览器恢复横向/纵向滚动位置（避免跳转后先偏右再回中的抖动） */
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+  window.addEventListener('pageshow', function () { window.scrollTo(0, 0); });
+
   /* toast */
   var toastEl;
   function toast(msg) {
@@ -114,11 +118,16 @@
     apply();
   })();
 
-  /* 随机一句 */
+  /* 随机一句：优先从"今日主题"（节气/节日/时令）相关词句里出，每天跟着今天走 */
   function showRandom() {
     var box = $('[data-random-box]'); if (!box) return;
-    fetchIndex().then(function (data) {
-      var p = data.pieces[Math.floor(Math.random() * data.pieces.length)];
+    Promise.all([fetchIndex(), fetchHistory().catch(function () { return null; })]).then(function (res) {
+      var data = res[0], hist = res[1];
+      var now = new Date();
+      var theme = todayTheme(hist, now.getFullYear(), todayMMDD(now), now.getMonth() + 1);
+      var pool = collectPieces(theme, data);
+      var src = pool.length ? pool : data.pieces;
+      var p = src[Math.floor(Math.random() * src.length)];
       box.hidden = false;
       box.innerHTML = renderCard(p, baseHref());
       box.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -143,6 +152,13 @@
       });
     _idx = mp.catch(function () {
       return fetch(R + 'data/index.json').then(function (r) { return r.json(); });
+    }).then(function (data) {
+      // 挂场景/地点名称映射，供「一句多用」标签展示
+      var S = {}, P = {};
+      (data.scenes || []).forEach(function (x) { S[x.id] = x.name; });
+      (data.places || []).forEach(function (x) { P[x.id] = x.name; });
+      window.__CJN = { S: S, P: P };
+      return data;
     });
     return _idx;
   }
@@ -153,6 +169,9 @@
   function renderCard(p, R) {
     var src = [p.a, p.w ? '《' + p.w + '》' : ''].filter(Boolean).join(' ');
     var t = tierOf(p.l);
+    var CJN = window.__CJN, extra = [];
+    if (CJN && p.s && p.s.length > 1) extra.push('适用场景：' + p.s.map(function (id) { return CJN.S[id] || id; }).join('、'));
+    if (CJN && p.pl && p.pl.length > 1) extra.push('地点：' + p.pl.map(function (id) { return CJN.P[id] || id; }).join('、'));
     return '<article class="q" data-tier="' + t + '">'
       + '<blockquote class="q-text">' + esc(p.t) + '</blockquote>'
       + (p.fo ? '<p class="q-o">' + esc(p.fo) + '</p>' : '')
@@ -161,8 +180,10 @@
       + (p.d ? '<span class="q-dyn">' + esc(p.d) + '</span>' : '')
       + '<span class="q-tier t-' + t + '">' + tierName(t) + '</span></div>'
       + (p.n ? '<p class="q-note"><span>怎么用</span>' + esc(p.n) + '</p>' : '')
-      + '<div class="q-act"><button class="btn-copy" data-copy="' + esc(p.t) + '">复制</button>'
-      + '<button class="btn-copy alt" data-copy="' + esc(p.t + (src ? ' —— ' + src : '')) + '">带出处复制</button></div>'
+      + (extra.length ? '<p class="q-extra">' + extra.join(' · ') + '</p>' : '')
+      + '<div class="q-act"><button class="btn-fav" data-fav="' + p.id + '" aria-label="收藏这句">☆</button>'
+      + '<button class="btn-copy" data-copy="' + esc(p.t) + '" aria-label="复制这句">复制</button>'
+      + '<button class="btn-copy alt" data-copy="' + esc(p.t + (src ? ' —— ' + src : '')) + '" aria-label="复制带出处">带出处复制</button></div>'
       + '</article>';
   }
 
@@ -186,21 +207,35 @@
       if (!kw) { results.innerHTML = ''; emptyEl.hidden = true; return; }
       fetchIndex().then(function (data) {
         var terms = kw.split(/\s+/).filter(Boolean);
-        var hits = data.pieces.map(function (p) {
+        var all = data.pieces.map(function (p) {
           var s = 0;
           terms.forEach(function (t) { s += score(p, t); });
           return { p: p, s: s };
         }).filter(function (h) { return h.s > 0; })
-          .sort(function (a, b) { return b.s - a.s || a.p.l - b.p.l; })
-          .slice(0, 120);
+          .sort(function (a, b) { return b.s - a.s || a.p.l - b.p.l; });
+        var total = all.length;
+        var PAGE = 60;
+        var shown = run._shown || 0;
+        if (shown > all.length) shown = all.length;
+        var hits = all.slice(0, Math.min(shown + PAGE, total));
+        run._shown = Math.min(shown + PAGE, total);
+        run._all = all;
         emptyEl.hidden = hits.length > 0;
-        results.innerHTML = hits.map(function (h) { return renderCard(h.p, baseHref()); }).join('');
+        results.innerHTML = hits.map(function (h) { return renderCard(h.p, baseHref()); }).join('')
+          + (hits.length < total ? '<p class="q-trunc">已显示 ' + hits.length + ' / 共 ' + total + ' 条，<button class="btn-loadmore" data-loadmore>加载更多</button></p>' : '');
         history.replaceState(null, '', '?q=' + encodeURIComponent(kw));
-      });
+      }).catch(function () { toast('搜索失败：数据加载出错，请检查网络后重试'); });
     }
+    // 加载更多：复用最近一次搜索结果，追加一页
     var t;
-    input.addEventListener('input', function () { clearTimeout(t); t = setTimeout(run, 180); });
+    input.addEventListener('input', function () { run._shown = 0; clearTimeout(t); t = setTimeout(run, 180); });
     if (input.value) run();
+    document.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-loadmore]');
+      if (!b) return;
+      e.preventDefault();
+      if (run._all) run();
+    });
     })();
 
     /* ── 今日 · 这一天在历史上 + 节日/节气 + 配几句词句 ── */
@@ -339,10 +374,14 @@
       var r = dateChipIds(data, theme, mmdd, 10);
       if (r.ids.length < 3) return; // 数据异常时保留服务端渲染的兜底提示词
       var R = baseHref();
-      bar.innerHTML = r.ids.map(function (id) { return '<a href="' + R + 's/' + id + '/">' + esc(r.smap[id]) + '</a>'; }).join('')
+      var todayBadge = (theme && theme.n) ? '<span class="hot-today" data-hot-today>今日·' + esc(shortName(theme.n)) + '</span>' : '';
+      bar.innerHTML = todayBadge + r.ids.map(function (id) { return '<a href="' + R + 's/' + id + '/">' + esc(r.smap[id]) + '</a>'; }).join('')
         + '<button class="hot-random" type="button" data-random>随便来一句</button>';
       var q = $('.hero-search input[name="q"]');
-      if (q) q.placeholder = '你现在是什么处境？' + r.ids.slice(0, 4).map(function (id) { return shortName(r.smap[id]); }).join('、') + '…';
+      if (q) {
+        var prefix = (theme && theme.n) ? '今日' + shortName(theme.n) + '，' : '';
+        q.placeholder = prefix + '你现在是什么处境？' + r.ids.slice(0, 4).map(function (id) { return shortName(r.smap[id]); }).join('、') + '…';
+      }
     }
 
     /* ── 搜索页：「试试」提示词与占位提示也按今天的日期换 ── */
@@ -395,6 +434,18 @@
         var R = baseHref();
         var head = '<div class="t-head"><h2>今日 <span class="t-date">' + (now.getMonth() + 1) + '月' + now.getDate() + '日 · 星期' + WEEK[now.getDay()] + '</span></h2>'
           + '<span class="t-tag">' + theme.kind + '·' + esc(theme.n) + '</span></div>';
+        // 今日节气文化条：三候 / 民俗 / 农谚 / 饮食（节气日显示）
+        var jqHtml = '';
+        if (theme && theme.kind === '节气' && window.__JQ_DATA) {
+          var jq = window.__JQ_DATA.filter(function (x) { return x.name === theme.n; })[0];
+          if (jq) {
+            jqHtml = '<div class="t-jq"><div class="t-jq-head"><b>' + esc(jq.name) + '</b><span>' + esc(jq.date) + '</span></div>'
+              + '<p><i>三候</i>' + esc(jq.time) + '</p>'
+              + '<p><i>民俗</i>' + esc(jq.folk) + '</p>'
+              + '<p><i>农谚</i>' + esc(jq.proverb) + '</p>'
+              + '<p><i>饮食</i>' + esc(jq.food) + '</p></div>';
+          }
+        }
         var evHtml = '';
         if (showEv.length) {
           evHtml = '<div class="t-sub-title">历史上的今天</div><ul class="t-events">'
@@ -412,7 +463,7 @@
             + '<div class="t-foot"><button type="button" data-today-next>换一批</button><span class="t-page" data-today-page></span>'
             + '<button type="button" class="t-back" data-today-back hidden>← 返回全部</button></div>';
         }
-        box.innerHTML = head + evHtml + phHtml;
+        box.innerHTML = head + jqHtml + evHtml + phHtml;
         box.hidden = false;
         if (!all.length) return;
 
@@ -655,7 +706,7 @@
         }
 
         if (!body) {
-          body = '<p class="nm-empty">这一带暂时没有收录相关的词句。可以直接点下面的地点卡片，或去「全部词句」里翻翻。</p>';
+          body = '<p class="nm-empty">这一带暂时没有收录相关的词句。可以直接点下面的地点卡片，或去「全部场景」里翻翻。</p>';
         } else if (nearest.d > 350) {
           body = '<p class="nm-empty">你离本站收录的古地名有点远，下面按由近及远排。</p>' + body;
         }
@@ -689,4 +740,460 @@
 
       btn.addEventListener('click', locate);
     })();
+})();
+
+
+/* ── 增强：分享卡片 · 暗色模式 · 反馈入口（追加，不影响既有逻辑） ── */
+(function enhance() {
+  var doc = document;
+
+  /* 1. 分享卡片（canvas 生成可下载 PNG） */
+  function shareImage(p) {
+    var W = 900, H = 560;
+    var c = doc.createElement('canvas'); c.width = W; c.height = H;
+    var x = c.getContext('2d');
+    var g = x.createLinearGradient(0, 0, W, H);
+    g.addColorStop(0, '#a8322d'); g.addColorStop(1, '#72201c');
+    x.fillStyle = g; x.fillRect(0, 0, W, H);
+    x.fillStyle = 'rgba(255,255,255,.8)'; x.font = '22px Georgia,serif'; x.textAlign = 'left';
+    x.fillText('词句 · 此刻，说句好的', 58, 64);
+    x.strokeStyle = 'rgba(255,255,255,.35)'; x.beginPath(); x.moveTo(58, 88); x.lineTo(W - 58, 88); x.stroke();
+    x.fillStyle = '#fffdf8'; x.font = '44px "Noto Serif SC","Songti SC",serif';
+    var maxW = W - 116, lines = [], cur = '';
+    var txt = p.t || '';
+    for (var i = 0; i < txt.length; i++) {
+      cur += txt[i];
+      if (x.measureText(cur).width > maxW) { lines.push(cur.slice(0, -1)); cur = txt[i]; }
+    }
+    if (cur) lines.push(cur);
+    var y = 190;
+    lines.forEach(function (ln) { x.fillText(ln, 58, y); y += 64; });
+    var src = [p.a, p.w ? '《' + p.w + '》' : ''].filter(Boolean).join(' ');
+    x.fillStyle = 'rgba(255,255,255,.88)'; x.font = '26px "Noto Serif SC",serif'; x.textAlign = 'right';
+    x.fillText(src || '佚名', W - 58, H - 88);
+    if (p.n) { x.fillStyle = 'rgba(255,255,255,.72)'; x.font = '20px sans-serif'; x.fillText(p.n, W - 58, H - 52); }
+    return c;
+  }
+  doc.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-share]');
+    if (!b) return;
+    var id = b.getAttribute('data-share');
+    fetchIndex().then(function (data) {
+      var p = data.pieces.find(function (z) { return z.i === id; });
+      if (!p) { toast('没找到这句'); return; }
+      var c = shareImage(p);
+      var a = doc.createElement('a');
+      a.href = c.toDataURL('image/png');
+      a.download = '词句-' + (p.a || '佚名') + '.png';
+      doc.body.appendChild(a); a.click(); a.remove();
+      toast('分享卡片已生成，已开始下载');
+    });
+  });
+  function injectShare() {
+    doc.querySelectorAll('.q-act').forEach(function (act) {
+      if (act.querySelector('[data-share]')) return;
+      var fav = act.querySelector('[data-fav]');
+      var id = fav ? fav.getAttribute('data-fav') : '';
+      if (!id) return;
+      var b = doc.createElement('button');
+      b.className = 'btn-copy share'; b.type = 'button'; b.setAttribute('data-share', id); b.textContent = '分享图';
+      b.setAttribute('aria-label', '生成分享卡片');
+      act.appendChild(b);
+    });
+  }
+  setTimeout(injectShare, 300);
+  if ('MutationObserver' in window) {
+    var mo = new MutationObserver(function () { injectShare(); });
+    if (doc.body) mo.observe(doc.body, { childList: true, subtree: true });
+  }
+
+  /* 2. 暗色模式（localStorage 优先，其次系统偏好） */
+  var KEY = 'ciju.theme';
+  function applyTheme(t) { doc.documentElement.setAttribute('data-theme', t === 'dark' ? 'dark' : 'light'); }
+  var saved = null; try { saved = localStorage.getItem(KEY); } catch (e) {}
+  if (saved) applyTheme(saved);
+  else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) applyTheme('dark');
+  function themeIcon() { return doc.documentElement.getAttribute('data-theme') === 'dark' ? '☀' : '🌙'; }
+  setTimeout(function () {
+    var head = doc.querySelector('.head-inner');
+    if (!head || doc.querySelector('[data-theme-toggle]')) return;
+    var b = doc.createElement('button');
+    b.className = 'theme-toggle'; b.type = 'button'; b.setAttribute('data-theme-toggle', '');
+    b.setAttribute('aria-label', '切换明暗模式'); b.title = '切换明暗模式';
+    b.textContent = themeIcon();
+    head.appendChild(b);
+  }, 200);
+  doc.addEventListener('click', function (e) {
+    var t = e.target.closest('[data-theme-toggle]');
+    if (!t) return;
+    var dark = doc.documentElement.getAttribute('data-theme') === 'dark';
+    var next = dark ? 'light' : 'dark';
+    applyTheme(next); t.textContent = themeIcon();
+    try { localStorage.setItem(KEY, next); } catch (e) {}
+  });
+})();
+
+/* ── U5 语音朗读 + U6 搜索增强 + U7 相关推荐（第二轮第 3 批） ── */
+(function round2() {
+  var doc = document;
+
+  /* ========== U5 语音朗读（TTS，Web Speech API，零 CDN） ========== */
+  var SYN = window.speechSynthesis;
+  function miniToast(msg) {
+    var el = doc.querySelector('.round2-toast');
+    if (!el) { el = doc.createElement('div'); el.className = 'round2-toast'; doc.body.appendChild(el); }
+    el.textContent = msg; el.classList.add('show');
+    clearTimeout(miniToast._t);
+    miniToast._t = setTimeout(function () { el.classList.remove('show'); }, 1800);
+  }
+  function speakText(txt, rate) {
+    if (!SYN || !('SpeechSynthesisUtterance' in window)) { miniToast('当前浏览器不支持语音朗读'); return; }
+    SYN.cancel();
+    var u = new SpeechSynthesisUtterance(txt);
+    u.lang = 'zh-CN';
+    u.rate = rate || 0.9;
+    // 优先中文音色
+    var vs = SYN.getVoices();
+    for (var i = 0; i < vs.length; i++) {
+      if (/zh|cmn|Chinese/i.test(vs[i].lang + vs[i].name)) { u.voice = vs[i]; break; }
+    }
+    SYN.speak(u);
+  }
+  function injectSpeak() {
+    doc.querySelectorAll('.q').forEach(function (card) {
+      if (card.querySelector('[data-speak]')) return;
+      var text = card.querySelector('.q-text');
+      var plain = card.querySelector('.q-x');
+      if (!text) return;
+      var b = doc.createElement('button');
+      b.className = 'btn-copy speak'; b.type = 'button'; b.setAttribute('data-speak', '');
+      b.textContent = '朗读';
+      b.title = '朗读这句';
+      b.setAttribute('aria-label', '朗读这句');
+      b.setAttribute('aria-pressed', 'false');
+      var act = card.querySelector('.q-act');
+      if (!act) return;
+      var txt = text.textContent + (plain ? '。' + plain.textContent : '');
+      b.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (SYN && SYN.speaking) { SYN.cancel(); b.classList.remove('on'); b.textContent = '朗读'; b.setAttribute('aria-pressed', 'false'); }
+        else { speakText(txt, 0.9); b.classList.add('on'); b.textContent = '停止'; b.setAttribute('aria-pressed', 'true'); }
+      });
+      function resetSpeak() { b.classList.remove('on'); b.textContent = '朗读'; b.setAttribute('aria-pressed', 'false'); }
+      SYN && SYN.addEventListener('end', resetSpeak);
+      SYN && SYN.addEventListener('error', resetSpeak);
+      act.insertBefore(b, act.firstChild);
+    });
+  }
+  setTimeout(injectSpeak, 300);
+  if ('MutationObserver' in window) {
+    new MutationObserver(injectSpeak).observe(doc.body, { childList: true, subtree: true });
+  }
+
+  /* ========== U6a 搜索命中高亮 ========== */
+  /* 在搜索结果渲染后，给 .q-text/.q-src 中的命中词包 <mark> */
+  function highlight(container, kw) {
+    if (!kw || !container) return;
+    var terms = kw.split(/\s+/).filter(Boolean);
+    if (!terms.length) return;
+    container.querySelectorAll('.q-text, .q-src, .q-x, .q-note').forEach(function (el) {
+      if (el.querySelector('mark')) return;
+      var html = el.innerHTML;
+      terms.forEach(function (t) {
+        if (!t) return;
+        var re = new RegExp('(' + t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'g');
+        html = html.replace(re, '<mark>$1</mark>');
+      });
+      el.innerHTML = html;
+    });
+  }
+  var _lastKw = '';
+  var _origRender = null;
+  // 在搜索 run() 输出后调用：通过轮询结果容器文本变化触发（避免改 run 内部）
+  var _hlTimer = null;
+  function pollHighlight() {
+    var input = doc.querySelector('#q');
+    var results = doc.querySelector('#results');
+    if (!input || !results) return;
+    var kw = input.value.trim();
+    if (kw && kw !== _lastKw) {
+      _lastKw = kw;
+      // 延迟到渲染完成后高亮
+      clearTimeout(_hlTimer);
+      _hlTimer = setTimeout(function () { highlight(results, kw); }, 120);
+    }
+  }
+  if (doc.querySelector('#q')) {
+    doc.querySelector('#q').addEventListener('input', pollHighlight);
+    // 事件驱动替代轮询：结果容器变化时重新高亮（输入事件 + 容器变化双保险）
+    var _hlResults = doc.querySelector('#results');
+    if (_hlResults && 'MutationObserver' in window) {
+      new MutationObserver(function () {
+        var kw = (doc.querySelector('#q') || {}).value;
+        if (kw) { clearTimeout(_hlTimer); _hlTimer = setTimeout(function () { highlight(_hlResults, kw); }, 100); }
+      }).observe(_hlResults, { childList: true, subtree: true });
+    }
+  }
+
+  /* ========== U6b 拼音首字母检索 ========== */
+  /* 内置常用作者/关键词拼音首字母映射（离线、体积小）；输入如 "sls" 命中"苏轼" */
+  var PY = {
+    'sls': ['苏轼'], 'libai': ['李白'], 'lib': ['李白'], 'df': ['杜甫'], 'dfu': ['杜甫'], 'bjy': ['白居易'],
+    'byj': ['白居易'], 'tjy': ['陶渊明'], 'wangwei': ['王维'], 'ww': ['王维'], 'liqingzhao': ['李清照'],
+    'lqz': ['李清照'], 'xinqiji': ['辛弃疾'], 'xqj': ['辛弃疾'], 'luyou': ['陆游'], 'ly': ['陆游'],
+    'yangwanli': ['杨万里'], 'ywl': ['杨万里'], 'dumu': ['杜牧'], 'dm': ['杜牧'], 'lishangyin': ['李商隐'],
+    'lsy': ['李商隐'], 'liuyuxi': ['刘禹锡'], 'lyx': ['刘禹锡'], 'meng-haoran': ['孟浩然'], 'mhr': ['孟浩然'],
+    'zhangjiuling': ['张九龄'], 'zjl': ['张九龄'], 'wanganshi': ['王安石'], 'was': ['王安石'],
+    'ouyangxiu': ['欧阳修'], 'oyx': ['欧阳修'], 'liuyong': ['柳永'], 'qinguan': ['秦观'], 'zhoubangyan': ['周邦彦'],
+    'nawlanxingde': ['纳兰性德'], 'na': ['纳兰性德'], 'zhuyuanzhang': ['毛泽东'], 'mzd': ['毛泽东'],
+    'luyin': ['鲁迅'], 'taigeer': ['泰戈尔'], 'tge': ['泰戈尔'], 'jiyueqin': ['纪伯伦'],
+    'nicai': ['尼采'], 'haizi': ['海子'], 'mu-xin': ['木心'], 'zhangailing': ['张爱玲'], 'zal': ['张爱玲'],
+    'sanmao': ['三毛'], 'laoshe': ['老舍'], 'bingxin': ['冰心'], 'zhuziqing': ['朱自清'], 'zzq': ['朱自清'],
+    'xiwan': ['席慕蓉'], 'gucheng': ['顾城'], 'beidao': ['北岛'], 'yuguangzhong': ['余光中'], 'ygz': ['余光中']
+  };
+  function pinyinExpand(kw) {
+    var k = kw.toLowerCase().replace(/[^a-z]/g, '');
+    if (!k || k.length < 2) return kw;
+    var names = PY[k];
+    if (!names) return kw;
+    // 输出 "kw 苏东坡|苏轼" 形式的扩展提示：直接并入搜索词（OR 语义）
+    return kw + ' ' + names.join(' ');
+  }
+  var _origInputVal = '';
+  var _pyTimer = null;
+  function pollPinyin() {
+    var input = doc.querySelector('#q');
+    if (!input) return;
+    var v = input.value;
+    if (/^[a-zA-Z]{2,6}$/.test(v.trim())) {
+      var k = v.trim().toLowerCase();
+      if (PY[k] && v !== _origInputVal) {
+        _origInputVal = v;
+        clearTimeout(_pyTimer);
+        _pyTimer = setTimeout(function () {
+          if (input.value === v) {
+            input.value = pinyinExpand(v);
+            input.dispatchEvent(new Event('input'));
+          }
+        }, 500);
+      }
+    } else _origInputVal = '';
+  }
+  if (doc.querySelector('#q')) {
+    doc.querySelector('#q').addEventListener('input', pollPinyin);
+  }
+
+  /* ========== U7 相关推荐（同场景/同心情/同作者，纯前端标签网络） ========== */
+  var _relIdx = null;
+  function relIndex() {
+    if (_relIdx) return _relIdx;
+    _relIdx = fetchIndexCached();
+    return _relIdx;
+  }
+  function fetchIndexCached() {
+    // 独立加载（浏览器 HTTP 缓存兜底），结构同主模块
+    if (fetchIndexCached._p) return fetchIndexCached._p;
+    var R = doc.querySelector('link[rel=stylesheet]') ? doc.querySelector('link[rel=stylesheet]').getAttribute('href').replace(/assets\/style\.css$/, '') : './';
+    var mp = fetch(R + 'data/pieces.msgpack')
+      .then(function (r) { if (!r.ok) throw new Error('no msgpack'); return r.arrayBuffer(); })
+      .then(function (buf) { return msgpack.decode(new Uint8Array(buf)); });
+    fetchIndexCached._p = mp.catch(function () {
+      return fetch(R + 'data/index.json').then(function (r) { return r.json(); });
+    }).then(function (data) {
+      if (!window.__CJN) {
+        var S = {}, P = {};
+        (data.scenes || []).forEach(function (x) { S[x.id] = x.name; });
+        (data.places || []).forEach(function (x) { P[x.id] = x.name; });
+        window.__CJN = { S: S, P: P };
+      }
+      return data;
+    });
+    return fetchIndexCached._p;
+  }
+  function buildRelMap(data) {
+    var byS = {}, byM = {}, byA = {};
+    (data.pieces || []).forEach(function (p) {
+      (p.s || []).forEach(function (sid) { (byS[sid] = byS[sid] || []).push(p); });
+      (p.m || []).forEach(function (mid) { (byM[mid] = byM[mid] || []).push(p); });
+      if (p.a) (byA[p.a] = byA[p.a] || []).push(p);
+    });
+    return { byS: byS, byM: byM, byA: byA };
+  }
+  function pickRel(pool, selfId, n) {
+    var out = [], used = {};
+    used[selfId] = 1;
+    for (var i = 0; i < (pool || []).length && out.length < n; i++) {
+      var c = pool[i];
+      if (used[c.i]) continue;
+      used[c.i] = 1;
+      out.push(c);
+    }
+    return out;
+  }
+  function injectRel() {
+    if (!window.__CJN) return;
+    doc.querySelectorAll('.q').forEach(function (card) {
+      if (card.querySelector('.q-rel')) return;
+      var shareBtn = card.querySelector('[data-share]');
+      if (!shareBtn) return;
+      var id = shareBtn.getAttribute('data-share');
+      if (!id) return;
+      relIndex().then(function (data) {
+        var me = (data.pieces || []).find(function (z) { return z.i === id; });
+        if (!me) return;
+        var rm = buildRelMap(data);
+        var pool = [];
+        var seen = {};
+        (me.s || []).forEach(function (sid) {
+          (rm.byS[sid] || []).forEach(function (p) { if (!seen[p.i]) { seen[p.i] = 1; pool.push(p); } });
+        });
+        if (pool.length < 3) {
+          (me.m || []).forEach(function (mid) {
+            (rm.byM[mid] || []).forEach(function (p) { if (!seen[p.i]) { seen[p.i] = 1; pool.push(p); } });
+          });
+        }
+        if (pool.length < 3 && me.a) {
+          (rm.byA[me.a] || []).forEach(function (p) { if (!seen[p.i]) { seen[p.i] = 1; pool.push(p); } });
+        }
+        var rel = pickRel(pool, me.i, 3);
+        if (!rel.length) return;
+        var html = '<div class="q-rel"><div class="q-rel-h">类似此刻</div>';
+        rel.forEach(function (r) {
+          var rsrc = [r.a, r.w ? '《' + r.w + '》' : ''].filter(Boolean).join(' ');
+          html += '<a class="q-rel-item" href="?q=' + encodeURIComponent(r.t.slice(0, 12)) + '" data-rel="' + r.i + '">'
+            + '<span class="q-rel-t">' + escRel(r.t) + '</span>'
+            + '<span class="q-rel-s">' + escRel(rsrc || '佚名') + '</span></a>';
+        });
+        html += '</div>';
+        card.insertAdjacentHTML('beforeend', html);
+      });
+    });
+  }
+  function escRel(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]; }); }
+  var _relTimer = null;
+  function pollRel() {
+    if (!window.__CJN) return;
+    clearTimeout(_relTimer);
+    _relTimer = setTimeout(injectRel, 400);
+  }
+  setTimeout(pollRel, 600);
+  if ('MutationObserver' in window) {
+    new MutationObserver(function () { if (doc.querySelector('.q')) pollRel(); }).observe(doc.body, { childList: true, subtree: true });
+  }
+  doc.addEventListener('click', function (e) {
+    var a = e.target.closest('[data-rel]');
+    if (!a) return;
+    e.preventDefault();
+    var q = doc.querySelector('#q');
+    if (q) {
+      // 站内搜索框存在：直接复用搜索，不跳转
+      q.value = (a.getAttribute('data-rel-q') || '');
+      q.dispatchEvent(new Event('input'));
+      var head = q.closest('header, .head, form');
+      if (head && head.scrollIntoView) head.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else if (a.getAttribute('href')) {
+      location.href = a.getAttribute('href');
+    }
+  });
+})();
+
+/* ── U9 收藏导出 / 导入（第二轮第 4 批） ── */
+(function favSync() {
+  var doc = document;
+  var FAV_KEY = 'ciju.fav';
+  function getFav() { try { return JSON.parse(localStorage.getItem(FAV_KEY) || '[]'); } catch (e) { return []; } }
+  function setFav(a) { try { localStorage.setItem(FAV_KEY, JSON.stringify(a)); } catch (e) {} }
+
+  function loadData() {
+    // 独立加载索引（浏览器 HTTP 缓存兜底）
+    var R = doc.querySelector('link[rel=stylesheet]') ? doc.querySelector('link[rel=stylesheet]').getAttribute('href').replace(/assets\/style\.css$/, '') : './';
+    var mp = fetch(R + 'data/pieces.msgpack')
+      .then(function (r) { if (!r.ok) throw new Error('no msgpack'); return r.arrayBuffer(); })
+      .then(function (buf) { return msgpack.decode(new Uint8Array(buf)); });
+    return mp.catch(function () { return fetch(R + 'data/index.json').then(function (r) { return r.json(); }); });
+  }
+
+  /* 导出：生成 Markdown 文本并下载 */
+  function exportMd() {
+    var fav = getFav();
+    if (!fav.length) { miniToast('还没有收藏任何句子'); return; }
+    loadData().then(function (data) {
+      var byId = {};
+      (data.pieces || []).forEach(function (p) { byId[p.i] = p; });
+      var lines = ['# 我的词句收藏', '', '共 ' + fav.length + ' 句 · 导出时间 ' + new Date().toLocaleString('zh-CN'), ''];
+      fav.forEach(function (id) {
+        var p = byId[id];
+        if (!p) return;
+        var src = [p.a, p.w ? '《' + p.w + '》' : ''].filter(Boolean).join(' ');
+        lines.push('- ' + p.t + (src ? ' —— ' + src : ''));
+      });
+      var blob = new Blob([lines.join('\n')], { type: 'text/markdown;charset=utf-8' });
+      var a = doc.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = '词句收藏.md';
+      doc.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 3000);
+      miniToast('已导出 ' + fav.length + ' 句收藏');
+    });
+  }
+
+  /* 导出 JSON（供导入还原 id） */
+  function exportJson() {
+    var fav = getFav();
+    if (!fav.length) { miniToast('还没有收藏任何句子'); return; }
+    loadData().then(function (data) {
+      var byId = {};
+      (data.pieces || []).forEach(function (p) { byId[p.i] = p; });
+      var out = fav.map(function (id) { var p = byId[id]; return p ? { i: p.i, t: p.t, a: p.a, w: p.w } : null; }).filter(Boolean);
+      var blob = new Blob([JSON.stringify(out, null, 0)], { type: 'application/json;charset=utf-8' });
+      var a = doc.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = '词句收藏.json';
+      doc.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 3000);
+      miniToast('已导出 JSON 备份');
+    });
+  }
+
+  /* 导入：合并去重 */
+  function importFile(file) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var raw = String(reader.result);
+        var arr;
+        if (/^\s*\[/.test(raw)) arr = JSON.parse(raw);           // JSON 备份
+        else {                                                    // Markdown 行
+          arr = raw.split('\n').filter(function (l) { return /^- /.test(l.trim()); })
+            .map(function (l) { return { t: l.trim().replace(/^- /, '').split(' —— ')[0] }; });
+        }
+        if (!Array.isArray(arr) || !arr.length) throw new Error('empty');
+        loadData().then(function (data) {
+          var normT = function (s) { return String(s || '').replace(/[\s，。、？！；：“”"''（）()《》·—…\-.,!?;:]/g, ''); };
+          var byT = {};
+          (data.pieces || []).forEach(function (p) { byT[normT(p.t)] = byT[normT(p.t)] || p.i; });
+          var cur = getFav(), set = new Set(cur), added = 0;
+          arr.forEach(function (it) {
+            var id = it.i || byT[normT(it.t)];
+            if (id && !set.has(id)) { set.add(id); added++; }
+          });
+          var merged = Array.from(set);
+          setFav(merged);
+          miniToast('导入完成：新增 ' + added + ' 句，现有 ' + merged.length + ' 句');
+          if (window.__favRefresh) window.__favRefresh();
+        });
+      } catch (e) {
+        miniToast('文件格式无法识别');
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function miniToast(msg) {
+    var el = doc.querySelector('.round2-toast');
+    if (!el) { el = doc.createElement('div'); el.className = 'round2-toast'; doc.body.appendChild(el); }
+    el.textContent = msg; el.classList.add('show');
+    clearTimeout(miniToast._t);
+    miniToast._t = setTimeout(function () { el.classList.remove('show'); }, 2000);
+  }
 })();

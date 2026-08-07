@@ -11,9 +11,11 @@
   --shadow:0 1px 2px rgba(60,45,20,.05),0 8px 24px -12px rgba(60,45,20,.12);
 }
 *{box-sizing:border-box}
-html{-webkit-text-size-adjust:100%}
+html{-webkit-text-size-adjust:100%;overflow-y:scroll}
+/* overflow-y:scroll 强制滚动条常驻：视口宽度恒定 → sticky 顶部导航不随滚动条出现/消失左右抖动 */
 body{
   margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);
+  overflow-x:hidden;
   font-size:15px;line-height:1.72;
   background-image:radial-gradient(circle at 15% 8%,rgba(168,50,45,.03),transparent 45%),radial-gradient(circle at 85% 30%,rgba(154,123,50,.035),transparent 40%);
 }
@@ -68,7 +70,7 @@ h1,h2,h3{font-family:var(--serif);font-weight:600;letter-spacing:.02em;margin:0}
 .stat{color:var(--ink-3);font-size:13px;margin:10px 0 0}
 
 /* ── 区块 ─────────────────────────── */
-.today{margin:18px auto 0;max-width:920px;text-align:left;border-top:1px solid var(--line-2);padding-top:14px}
+.today{margin:18px 0 0;width:100%;text-align:left;border-top:1px solid var(--line-2);padding-top:14px}
 .today .t-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:8px}
 .today .t-head h2{font-family:var(--serif);font-size:19px;letter-spacing:.05em;margin:0}
 .today .t-date{font-family:var(--sans,inherit);font-size:13.5px;color:var(--ink-2);font-weight:400}
@@ -388,3 +390,199 @@ a.q-src:hover{color:var(--zhu)}
   .tabbar .tb-mic .tb-ic{color:#fff;font-size:24px}
   .install-bar{bottom:calc(74px + env(safe-area-inset-bottom))}
 }
+
+
+/* ── 暗色模式与增强按钮（追加） ── */
+:root[data-theme="dark"]{
+  --paper:#17140f; --paper-2:#201c15; --card:#241f17;
+  --ink:#eae3d2; --ink-2:#bcb29f; --ink-3:#8d8370; --ink-4:#6b6253;
+  --zhu:#dd6b5f; --zhu-2:#e88c83; --zhu-bg:#3c2521;
+  --line:#3a342a; --line-2:#2f2a22;
+  --shadow:0 1px 2px rgba(0,0,0,.35),0 10px 28px -14px rgba(0,0,0,.55);
+}
+:root[data-theme="dark"] .site-head{background:rgba(23,20,15,.9)}
+:root[data-theme="dark"] .site-foot{background:var(--paper-2);border-color:var(--line)}
+:root[data-theme="dark"] .nav a:hover,:root[data-theme="dark"] .nav a.on{background:var(--zhu-bg);color:var(--zhu)}
+:root[data-theme="dark"] img{opacity:.92}
+.theme-toggle{background:none;border:1px solid var(--line);border-radius:9px;color:var(--ink-2);font-size:16px;padding:4px 10px;margin-left:auto;transition:border-color .15s}
+.theme-toggle:hover{border-color:var(--zhu);color:var(--zhu)}
+.btn-copy.share{color:var(--zhu);border-color:var(--zhu)}
+.btn-copy.share:hover{background:var(--zhu-bg)}
+
+/* 一句多用标签 */
+.q-extra{margin:6px 0 0;font-size:12px;color:var(--sub, #8a8072);line-height:1.6}
+.q-extra::before{content:"◈ ";color:var(--accent, #a8322d)}
+
+/* 第二轮第 3 批：语音朗读 · 搜索高亮 · 相关推荐 */
+mark{background:#ffe9a8;color:#5b3a00;border-radius:3px;padding:0 2px}
+.btn-copy.speak{color:#a8322d;border-color:rgba(168,50,45,.4)}
+.q-rel{margin:12px 0 0;border-top:1px dashed var(--line, #e8e1d6);padding-top:10px}
+.q-rel-h{font-size:12px;color:var(--sub, #8a8072);margin-bottom:6px;letter-spacing:1px}
+.q-rel-item{display:flex;justify-content:space-between;align-items:baseline;gap:10px;text-decoration:none;padding:4px 2px;border-radius:6px}
+.q-rel-item:hover{background:var(--chip, #f0e9de)}
+.q-rel-t{font-size:13px;color:var(--ink, #2b2620);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.q-rel-s{font-size:11px;color:var(--sub, #8a8072);flex-shrink:0}
+.round2-toast{position:fixed;left:50%;bottom:80px;transform:translateX(-50%) translateY(20px);background:rgba(43,38,32,.92);color:#fff;padding:8px 18px;border-radius:99px;font-size:13px;opacity:0;transition:opacity .25s, transform .25s;pointer-events:none;z-index:9999}
+.round2-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.btn-copy.speak.on{background:#a8322d;color:#fff;border-color:#a8322d}
+
+/* 搜索截断提示 */
+.q-trunc{margin:18px 4px 6px;padding:10px 14px;border:1px dashed var(--line, #e8e1d6);border-radius:10px;font-size:13px;color:var(--sub, #8a8072);text-align:center}
+
+.also h3{font-size:17px;letter-spacing:.06em;margin-bottom:14px;color:var(--ink-2)}
+.btn-loadmore{margin:14px auto;display:block;padding:8px 28px;border:1px solid var(--line, #e8e1d6);border-radius:99px;background:var(--card, #fffdf8);color:var(--ink, #2b2620);font-size:14px;cursor:pointer}
+.btn-loadmore:hover{background:var(--chip, #f0e9de);border-color:var(--accent, #a8322d)}
+
+/* 二十四节气专题页（第六轮 W10） */
+.jq-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:16px 0}
+.jq-card{background:var(--card,#fffdf8);border:1px solid var(--line,#e8e1d6);border-radius:12px;padding:12px 14px;text-decoration:none;color:var(--ink,#2b2620);display:flex;flex-direction:column;gap:3px;transition:box-shadow .2s}
+.jq-card:hover{box-shadow:0 4px 14px rgba(0,0,0,.08);border-color:var(--accent,#a8322d)}
+.jq-card b{font-size:16px}
+.jq-card em{font-style:normal;font-size:12px;color:var(--accent,#a8322d)}
+.jq-card span{font-size:12px;color:var(--sub,#8a8072)}
+.jq-card small{font-size:11px;color:var(--sub,#8a8072);margin-top:4px}
+.jq-tip{margin:14px 0;padding:12px 16px;background:var(--chip,#f0e9de);border-radius:10px;font-size:13px;color:var(--ink-2,#5a5045)}
+.jq-culture{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:16px 0}
+.jq-item{background:var(--card,#fffdf8);border:1px solid var(--line,#e8e1d6);border-radius:12px;padding:12px 14px}
+.jq-item b{display:block;font-size:12px;color:var(--accent,#a8322d);letter-spacing:1px;margin-bottom:4px}
+.jq-item span{font-size:14px;line-height:1.6}
+.jq-link{margin:4px 0 14px;font-size:13px}
+.jq-nav{display:flex;justify-content:space-between;margin:22px 0 8px}
+
+/* ── 第七轮 W11：宽屏五档断点 + 超宽屏装饰 ── */
+/* 卡片列宽基准：300px 起步，宽容器自动多列，单卡不过宽 */
+.q-list{grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr))}
+
+/* 平板中间态：内容与间距更舒展 */
+@media (min-width:1024px){
+  .wrap{padding:0 26px}
+  .q-list{gap:12px}
+  .s-grid{gap:14px}
+}
+
+/* 常规大屏：内容区 1040 → 1240 */
+@media (min-width:1280px){
+  .wrap{max-width:1240px}
+  .hero{padding:34px 0 26px}
+  .hero h1{font-size:46px;letter-spacing:.14em}
+  .hero-sub{font-size:16px;max-width:680px}
+  .hero-search{max-width:560px}
+  .q{padding:18px 20px 14px}
+  .q-text{font-size:19px}
+  .foot-cols{gap:40px}
+}
+
+/* 2K 屏：内容区 1240 → 1440（4 列卡片） */
+@media (min-width:1600px){
+  .wrap{max-width:1440px}
+  .hero h1{font-size:50px}
+  .q-list{gap:14px}
+  .s-grid{grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px}
+  .m-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+  .jq-grid{grid-template-columns:repeat(auto-fill,minmax(170px,1fr))}
+}
+
+/* 4K 屏：内容区 → 1680（5 列卡片）+ 两侧装饰 */
+@media (min-width:2560px){
+  body{position:relative}
+  body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+    background:
+      radial-gradient(600px 480px at 8% 12%, rgba(168,50,45,.05), transparent 70%),
+      radial-gradient(700px 520px at 92% 20%, rgba(200,170,120,.07), transparent 70%),
+      radial-gradient(640px 500px at 85% 85%, rgba(168,50,45,.04), transparent 70%),
+      radial-gradient(560px 460px at 12% 88%, rgba(200,170,120,.05), transparent 70%)}
+  .wrap{max-width:1680px}
+  .hero h1{font-size:54px}
+  .q-text{font-size:20px}
+  .q[data-tier="short"] .q-text{font-size:23px}
+}
+
+/* 21:9 超宽屏：内容区 → 1760（5 列、单卡 ~340px 可读）+ 装饰增强 */
+@media (min-width:3440px){
+  .wrap{max-width:1760px}
+  .hero h1{font-size:58px;letter-spacing:.16em}
+  .hero-sub{font-size:17px;max-width:720px}
+  .q-list{gap:16px}
+  .q{padding:20px 22px 15px}
+  body::before{
+    radial-gradient(900px 700px at 6% 10%, rgba(168,50,45,.06), transparent 70%),
+    radial-gradient(1000px 760px at 94% 18%, rgba(200,170,120,.08), transparent 70%),
+    radial-gradient(900px 680px at 88% 86%, rgba(168,50,45,.05), transparent 70%),
+    radial-gradient(820px 640px at 10% 90%, rgba(200,170,120,.06), transparent 70%)}
+}
+
+/* 卡片 hover 打磨：微上浮 + 朱红边框（桌面端） */
+@media (hover:hover) and (min-width:821px){
+  .q:hover{transform:translateY(-2px);border-color:rgba(168,50,45,.45);box-shadow:0 6px 18px -6px rgba(43,38,32,.16)}
+  .s-card:hover,.m-card:hover,.jq-card:hover,.a-card:hover{transform:translateY(-1px)}
+}
+
+/* ── 第七轮 W12：小屏空间利用率 ── */
+@media (max-width:560px){
+  /* q-act 5 按钮 → 2 行紧凑网格：复制满宽首行（拇指区），次行 4 按钮均分 */
+  .q-act{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+  .q-act .btn-copy:not(.alt):not(.speak):not(.share){order:0;grid-column:1/-1;padding:10px 0;font-size:13.5px}
+  .q-act .btn-fav{order:1;margin-left:0}
+  .q-act .btn-copy.alt,.q-act .btn-copy.speak,.q-act .btn-copy.share{order:1}
+  .q-act .btn-fav,.q-act .btn-copy.alt,.q-act .btn-copy.speak,.q-act .btn-copy.share{padding:9px 0;font-size:12px;min-height:38px;display:flex;align-items:center;justify-content:center;border-radius:7px}
+  /* 卡片紧凑：padding 13→11、正文 18→17，单屏多装内容 */
+  .q{padding:11px 12px 9px}
+  .q-text{font-size:17px}
+  .q[data-tier="short"] .q-text{font-size:20px}
+  .q[data-tier="long"] .q-text{font-size:15.5px}
+  .q-meta{margin-top:11px}
+  .q-note{padding:8px 10px;font-size:12.5px}
+  .q-x{font-size:12.5px;margin-top:8px}
+}
+/* 极端小屏：场景卡 2 列 → 1 列，避免卡片过窄文字换行爆炸 */
+@media (max-width:400px){
+  .s-grid{grid-template-columns:1fr}
+}
+
+/* ── 第七轮 W13：backdrop-filter 降级（老浏览器纯色兜底） ── */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))){
+  .site-head{background:rgba(250,248,243,.97)}
+  .tabbar{background:rgba(250,248,243,.98)}
+  .install-bar{background:rgba(43,38,32,.98)}
+  .filters{background:rgba(250,248,243,.98)}
+  .hero,.page-hero{background:var(--paper)}
+}
+
+/* ── 第七轮：按钮配色体系统一（亮/暗自动适配） ──
+   主操作（复制）= 朱红实底白字（--zhu，暗色自动珊瑚）
+   次级操作（带出处/朗读/分享）= 主题浅底 + 主题色字（soft 风格，清晰不重）
+   全部走 CSS 变量，修复此前 speak/share 硬编码 #a8322d 导致暗色失效 */
+.btn-copy.alt,.btn-copy.speak,.btn-copy.share{
+  background:var(--zhu-bg);
+  color:var(--zhu);
+  border:1px solid transparent;
+}
+.btn-copy.alt:hover,.btn-copy.speak:hover,.btn-copy.share:hover{
+  background:var(--zhu);
+  color:#fff;
+  border-color:var(--zhu);
+}
+.btn-copy.speak.on{background:var(--zhu);color:#fff;border-color:var(--zhu)}
+.btn-copy.speak:not(.on){border-color:transparent}
+.btn-loadmore:hover{border-color:var(--zhu);color:var(--zhu)}
+
+/* 暗色模式对比度微调：
+   次级按钮文字用更亮的 --zhu-2（珊瑚 5.4:1）
+   主按钮实底加深一档（白字 4.4:1 ≈ WCAG AA） */
+:root[data-theme="dark"] .btn-copy.alt,
+:root[data-theme="dark"] .btn-copy.speak,
+:root[data-theme="dark"] .btn-copy.share{color:var(--zhu-2)}
+:root[data-theme="dark"] .btn-copy:not(.alt):not(.speak):not(.share){background:#c2544a}
+:root[data-theme="dark"] .btn-copy:not(.alt):not(.speak):not(.share):hover{background:#d26a5e}
+/* 暗色：朗读激活态与主按钮统一加深 */
+:root[data-theme="dark"] .btn-copy.speak.on{background:#c2544a;border-color:#c2544a}
+
+/* ── 第七轮：今日节气文化条 + 今日徽标 ── */
+.hot-today{font-family:var(--serif);font-size:13px;color:var(--zhu);border:1px solid var(--zhu);border-radius:999px;padding:4px 14px;letter-spacing:.08em;background:var(--zhu-bg)}
+.t-jq{margin:14px 0 4px;border:1px solid var(--line);border-left:3px solid var(--zhu);border-radius:10px;padding:12px 16px;background:var(--card)}
+.t-jq-head{display:flex;align-items:baseline;gap:10px;margin-bottom:6px}
+.t-jq-head b{font-family:var(--serif);font-size:17px;color:var(--zhu)}
+.t-jq-head span{font-size:12px;color:var(--ink-3)}
+.t-jq p{margin:3px 0;font-size:13px;line-height:1.7;color:var(--ink-2)}
+.t-jq p i{display:inline-block;font-style:normal;font-size:11px;color:#fff;background:var(--gold);padding:0 7px;border-radius:4px;margin-right:8px;letter-spacing:.1em}
+.t-jq .t-jq-link{display:inline-block;margin-top:6px;font-size:12.5px;color:var(--zhu);border-bottom:1px dashed var(--zhu)}

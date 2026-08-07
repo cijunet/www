@@ -75,25 +75,6 @@ export function authorsIndexPage(D) {
   return layout({ depth: 1, title: '全部作者', desc, canonical: 'authors/', hero, content });
 }
 
-/* ── 全部词句 ───────────────────────────────── */
-export function allPage(D) {
-  const list = [...D.pieces].sort((a, b) => a.len - b.len);
-  const desc = `${SITE.name}全部 ${list.length} 条词句一页浏览，支持按长度、来源、心情筛选。`;
-  const hero = `<section class="page-hero">
-  <div class="wrap">
-    <nav class="crumb"><a href="${R1}">首页</a> › <span>全部词句</span></nav>
-    <h1>全部词句</h1>
-    <p class="lead">${list.length} 条，从最短的排到最长的。想慢慢翻就翻这里。</p>
-  </div>
-</section>`;
-  const content = `<div class="wrap">
-  ${filterBar(D.moods, D.places)}
-  ${cardList(list, R1)}
-</div>`;
-  return layout({ depth: 1, title: '全部词句', desc, canonical: 'all/', hero, content });
-}
-
-/* ── 搜索页 ─────────────────────────────────── */
 export function searchPage(D) {
   const desc = '在站内搜索词句：可以搜句子本身、作者、出处，也可以直接搜你此刻的处境，比如"落榜""想家"。';
   const hero = `<section class="page-hero">
@@ -108,7 +89,7 @@ export function searchPage(D) {
     <input type="search" id="q" name="q" placeholder="比如：杜甫 / 想家 / 一个人吃饭" autocomplete="off" autofocus>
   </form>
   <div class="s-hint">试试：${['dengding','xiangnian','jiaban','yigeren','songbie','chonglai'].map(id => `<button class="chip" data-fill="${esc(D.sceneMap[id].name)}">${esc(D.sceneMap[id].name)}</button>`).join('')}</div>
-  <div id="results" class="q-list"></div>
+  <div id="results" class="q-list" aria-live="polite"></div>
   <p class="empty" data-search-empty hidden>没找到。换个说法试试，或者去<a href="${R1}scenes/">全部场景</a>里翻。</p>
 </div>`;
   return layout({ depth: 1, title: '搜索', desc, canonical: 'search/', hero, content, bodyClass: 'page-search' });
