@@ -23,5 +23,5 @@ WWW_preview/
 WWW_preview2/
 site_bak_*/
 
-# 运行期生成的抓取缓存（由 build/fetch-history.mjs 产出，可重新生成）
-data/history-raw.json
+# data/history-raw.json 是构建必要输入（今日/历史事件版块依赖它），必须入库；
+# 如需重新抓取用 build/fetch-history.mjs，产出后再提交即可。

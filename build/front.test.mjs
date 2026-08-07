@@ -44,7 +44,7 @@ global.localStorage = {
   removeItem: k => { delete store[k]; }
 };
 global.__fetchedUrls = [];
-const HIST = JSON.parse(fs.readFileSync('WWW/data/history.json', 'utf8'));
+const HIST = fs.existsSync('WWW/data/history.json') ? JSON.parse(fs.readFileSync('WWW/data/history.json', 'utf8')) : {};
 global.fetch = (url) => {
   const u = String(url);
   global.__fetchedUrls.push(u);
