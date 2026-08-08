@@ -9,7 +9,7 @@ const D = await loadAll();
 const norm = s => (s || '').replace(/[\s，。、？！；：""''‘’“”（）()《》·—…\-.,!?;:]/g, '');
 
 test('loadAll 数据完整性：总数与零告警', async () => {
-  assert.ok(D.pieces.length >= 11450, `总词句应 ≥ 11450（当前 ${D.pieces.length}）`);
+  assert.ok(D.pieces.length >= 10000, `总词句应 ≥ 10000（去重后当前 ${D.pieces.length}）`);
   assert.equal(D.warnings.length, 0, '不应有警告');
 });
 
@@ -29,12 +29,14 @@ test('正文无近似重复（去标点唯一）', async () => {
   assert.equal(new Set(keys).size, keys.length, '正文去标点后应互不重复');
 });
 
-test('分类：古典为主，且 world 类无中国朝代混入', async () => {
+test('分类：古典仍是最大类别，且 world 类无中国朝代混入', async () => {
   const c = D.pieces.filter(p => p.origin === 'classic').length;
   const wo = D.pieces.filter(p => p.origin === 'world').length;
   const mo = D.pieces.filter(p => p.origin === 'modern').length;
   assert.equal(c + wo + mo, D.pieces.length);
-  assert.ok(c > 5500, '古典应 >5500');
+  // 去重后古典约 48%：不再是多数（用户已确认质量优先），但仍是第一大类别
+  assert.ok(c > mo && c > wo, '古典应仍是第一大类别（>现代 且 >世界）');
+  assert.ok(c > 5000, '古典应 >5000');
   const CN = ['先秦','春秋','战国','秦','汉','东晋','魏','金','南北朝','北魏','南朝'];
   const bad = D.pieces.filter(p => p.origin === 'world' && !p.o && CN.includes((p.d || '').trim()));
   assert.equal(bad.length, 0, 'world 类不应混入中国朝代写法');

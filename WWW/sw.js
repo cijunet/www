@@ -1,4 +1,4 @@
-const APP='ciju-app-df068920';        // 缓存版本：随数据指纹自动变化，旧缓存自动失效（无需手改）
+const APP='ciju-app-18382ff1';        // 缓存版本：随数据指纹自动变化，旧缓存自动失效（无需手改）
 const SHELL=['./','./index.html','./assets/style.css','./assets/app.js','./assets/msgpack.min.js','./assets/manifest.webmanifest','./assets/icon.svg','./404.html','./scenes/','./moods/','./places/','./authors/','./search/','./about/'];
 self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(APP).then(c=>c.addAll(SHELL).catch(()=>{})).then(()=>true));});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==APP).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
