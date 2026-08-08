@@ -176,8 +176,6 @@ a.q-src:hover{color:var(--zhu)}
 .btn-copy.alt{background:none;color:var(--ink-3);border:1px solid var(--line)}
 .btn-copy.alt:hover{border-color:var(--zhu);color:var(--zhu);background:none}
 .btn-copy.done{background:#4a7048!important;color:#fff!important;border-color:#4a7048!important}
-.btn-fav{margin-left:auto;background:none;border:0;color:var(--ink-4);font-size:17px;line-height:1;padding:2px 4px}
-.btn-fav:hover,.btn-fav.on{color:var(--gold)}
 
 /* ── 场景分组（心情/地点/作者页内） ──────── */
 /* 一条词句可能属于多个场景 → 在多个分组里都出现；分组便于用户直奔某个处境。 */
@@ -258,7 +256,6 @@ a.q-src:hover{color:var(--zhu)}
   .q-note{margin-top:9px;padding:8px 10px;font-size:12.5px}
   .q-act{margin-top:10px;padding-top:9px;gap:8px}
   .btn-copy{padding:8px 16px;font-size:13px}
-  .btn-fav{padding:6px 8px;font-size:18px}
   .g-block{padding:26px 0 2px}
   .g-title{font-size:18px;margin-bottom:13px;padding-bottom:9px;gap:10px}
   .s-grid{gap:10px}
@@ -406,8 +403,6 @@ a.q-src:hover{color:var(--zhu)}
 :root[data-theme="dark"] img{opacity:.92}
 .theme-toggle{background:none;border:1px solid var(--line);border-radius:9px;color:var(--ink-2);font-size:16px;padding:4px 10px;margin-left:auto;transition:border-color .15s}
 .theme-toggle:hover{border-color:var(--zhu);color:var(--zhu)}
-.btn-copy.share{color:var(--zhu);border-color:var(--zhu)}
-.btn-copy.share:hover{background:var(--zhu-bg)}
 
 /* 一句多用标签 */
 .q-extra{margin:6px 0 0;font-size:12px;color:var(--sub, #8a8072);line-height:1.6}
@@ -519,12 +514,11 @@ mark{background:#ffe9a8;color:#5b3a00;border-radius:3px;padding:0 2px}
 
 /* ── 第七轮 W12：小屏空间利用率 ── */
 @media (max-width:560px){
-  /* q-act 5 按钮 → 2 行紧凑网格：复制满宽首行（拇指区），次行 4 按钮均分 */
+  /* q-act 按钮 → 2 行紧凑网格：复制满宽首行（拇指区），次行 3 按钮均分 */
   .q-act{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
-  .q-act .btn-copy:not(.alt):not(.speak):not(.share){order:0;grid-column:1/-1;padding:10px 0;font-size:13.5px}
-  .q-act .btn-fav{order:1;margin-left:0}
-  .q-act .btn-copy.alt,.q-act .btn-copy.speak,.q-act .btn-copy.share{order:1}
-  .q-act .btn-fav,.q-act .btn-copy.alt,.q-act .btn-copy.speak,.q-act .btn-copy.share{padding:9px 0;font-size:12px;min-height:38px;display:flex;align-items:center;justify-content:center;border-radius:7px}
+  .q-act .btn-copy:not(.alt):not(.speak){order:0;grid-column:1/-1;padding:10px 0;font-size:13.5px}
+  .q-act .btn-copy.alt,.q-act .btn-copy.speak{order:1}
+  .q-act .btn-copy.alt,.q-act .btn-copy.speak{padding:9px 0;font-size:12px;min-height:38px;display:flex;align-items:center;justify-content:center;border-radius:7px}
   /* 卡片紧凑：padding 13→11、正文 18→17，单屏多装内容 */
   .q{padding:11px 12px 9px}
   .q-text{font-size:17px}
@@ -550,14 +544,14 @@ mark{background:#ffe9a8;color:#5b3a00;border-radius:3px;padding:0 2px}
 
 /* ── 第七轮：按钮配色体系统一（亮/暗自动适配） ──
    主操作（复制）= 朱红实底白字（--zhu，暗色自动珊瑚）
-   次级操作（带出处/朗读/分享）= 主题浅底 + 主题色字（soft 风格，清晰不重）
-   全部走 CSS 变量，修复此前 speak/share 硬编码 #a8322d 导致暗色失效 */
-.btn-copy.alt,.btn-copy.speak,.btn-copy.share{
+   次级操作（带出处/朗读）= 主题浅底 + 主题色字（soft 风格，清晰不重）
+   全部走 CSS 变量，修复此前 speak 硬编码 #a8322d 导致暗色失效 */
+.btn-copy.alt,.btn-copy.speak{
   background:var(--zhu-bg);
   color:var(--zhu);
   border:1px solid transparent;
 }
-.btn-copy.alt:hover,.btn-copy.speak:hover,.btn-copy.share:hover{
+.btn-copy.alt:hover,.btn-copy.speak:hover{
   background:var(--zhu);
   color:#fff;
   border-color:var(--zhu);
@@ -570,10 +564,9 @@ mark{background:#ffe9a8;color:#5b3a00;border-radius:3px;padding:0 2px}
    次级按钮文字用更亮的 --zhu-2（珊瑚 5.4:1）
    主按钮实底加深一档（白字 4.4:1 ≈ WCAG AA） */
 :root[data-theme="dark"] .btn-copy.alt,
-:root[data-theme="dark"] .btn-copy.speak,
-:root[data-theme="dark"] .btn-copy.share{color:var(--zhu-2)}
-:root[data-theme="dark"] .btn-copy:not(.alt):not(.speak):not(.share){background:#c2544a}
-:root[data-theme="dark"] .btn-copy:not(.alt):not(.speak):not(.share):hover{background:#d26a5e}
+:root[data-theme="dark"] .btn-copy.speak{color:var(--zhu-2)}
+:root[data-theme="dark"] .btn-copy:not(.alt):not(.speak){background:#c2544a}
+:root[data-theme="dark"] .btn-copy:not(.alt):not(.speak):hover{background:#d26a5e}
 /* 暗色：朗读激活态与主按钮统一加深 */
 :root[data-theme="dark"] .btn-copy.speak.on{background:#c2544a;border-color:#c2544a}
 

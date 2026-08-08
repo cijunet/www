@@ -1,6 +1,6 @@
 /* 词句站前端无头自测：假 DOM + 真实 msgpack 数据，真实执行 app.js 核心路径
- * 覆盖：今日主题渲染 / 关键词搜索 / 拼音搜索 / 收藏 / 导出 md / 导入
- * 用法：node _front_test.mjs  （临时脚本，测完删除）
+ * 覆盖：今日主题渲染 / 关键词搜索 / 拼音搜索 / 页脚清理 / 数据完整性
+ * 用法：node build/front.test.mjs
  */
 import fs from 'node:fs';
 import { createRequire } from 'node:module';
@@ -82,7 +82,6 @@ class El {
   getAttribute(k) { return this[k] !== undefined ? this[k] : null; }
   removeAttribute(k) { delete this[k]; }
   closest(sel) {
-    if (sel === '[data-fav]' && this.getAttribute('data-fav')) return this;
     if (sel === '[data-copy]' && this.getAttribute('data-copy')) return this;
     if (sel === '[data-rel]' && this.getAttribute('data-rel')) return this;
     return null;
@@ -101,7 +100,7 @@ global.document = {
   createElement: () => new El('created'),
   getElementById: () => null,
   querySelector: (sel) => elFor(sel),
-  querySelectorAll: (sel) => (sel === '[data-fav]' ? [] : []),
+  querySelectorAll: () => [],
   addEventListener(t, fn) { (docListeners[t] = docListeners[t] || []).push(fn); },
   execCommand: () => true
 };
@@ -122,7 +121,7 @@ function ok(cond, name) {
 }
 
 /* ── 4. 测试序列 ── */
-await sleep(1200); // 等首次数据加载 + 今日主题 + favSync 注入
+await sleep(1200); // 等首次数据加载 + 今日主题
 
 console.log('T0 节气融入今日（固定 8 月 7 日 = 立秋）');
 const todayBox = pool.get('[data-today]');
@@ -150,7 +149,7 @@ await sleep(600);
 ok(results.innerHTML.includes('q-text'), '搜索结果渲染卡片（含 q-text）');
 ok(results.innerHTML.length > 300, '结果非空（' + results.innerHTML.length + ' 字符）');
 ok(/t-(short|mid)/.test(results.innerHTML), '长度分级生效（出现极短/适中，非全偏长）');
-ok(results.innerHTML.includes('data-fav'), '动态卡片含收藏按钮');
+ok(results.innerHTML.includes('data-copy'), '动态卡片含复制按钮');
 ok(results.innerHTML.includes('aria-label'), '卡片按钮含 aria-label');
 
 console.log('T3 拼音搜索（sls → 苏轼）');
@@ -160,15 +159,15 @@ await sleep(1500); // 拼音扩展 500ms 延迟 + 二次搜索异步渲染
 ok(results.innerHTML.includes('苏轼'), '拼音 sls 命中苏轼句（扩展为 "sls 苏轼"）');
 console.log('    扩展后输入值: ' + JSON.stringify(q.value));
 
-console.log('T4 收藏');
-const favBtn = new El('favbtn');
-favBtn.setAttribute('data-fav', 'mock-id-1');
-favBtn.closest = (sel) => (sel === '[data-fav]' ? favBtn : null);
-(docListeners.click || []).forEach(fn => fn({ target: favBtn }));
-ok((store['ciju.fav'] || '').includes('mock-id-1'), '收藏写入 localStorage');
-// 再点一次应取消
-(docListeners.click || []).forEach(fn => fn({ target: favBtn }));
-ok(!(store['ciju.fav'] || '').includes('mock-id-1'), '再点取消收藏');
+console.log('T4 简化确认（收藏/分享/心情分类已移除）');
+const appSrc2 = fs.readFileSync('assets/app.js', 'utf8');
+ok(!appSrc2.includes('data-fav'), 'app.js 无收藏按钮/逻辑');
+ok(!appSrc2.includes('data-share'), 'app.js 无分享图逻辑');
+ok(!appSrc2.includes("data-f=\"mood\""), 'app.js 无心情筛选');
+ok(!appSrc2.includes('FAV_KEY'), 'app.js 无收藏存储');
+const tplSrc = fs.readFileSync('build/templates.mjs', 'utf8');
+ok(!tplSrc.includes('btn-fav'), 'templates 无收藏按钮');
+ok(!tplSrc.includes('<span class="f-label">心情</span>'), 'templates 无心情筛选行');
 
 console.log('T5 页脚清理（导出/纠错入口已移除）');
 // 用户要求移除页脚"导出收藏/导出JSON/导入收藏/纠错·建议"注入

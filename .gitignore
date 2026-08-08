@@ -22,8 +22,9 @@ WWW_preview/
 WWW_preview2/
 site_bak_*/
 
-# 数据源（xlsx 与 history-raw.json）仅留本地，绝不进公开仓库
-data/词句数据.xlsx
+# 数据源（xlsx 全族与 history-raw.json）仅留本地，绝不进公开仓库。
+# 含唯一真源 词句数据.xlsx 与各类 backup_*.xlsx 备份。
+data/*.xlsx
 data/history-raw.json
 
 # 构建期生成的数据指纹快照（每次构建都变，无需入库）

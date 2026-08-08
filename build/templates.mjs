@@ -116,7 +116,7 @@ export function card(p, R, { showScenes = true, idSuffix = '' } = {}) {
   const tier = lengthTier(p.t);
   const src = [p.a, p.w ? `《${p.w}》` : ''].filter(Boolean).join(' ');
   const cid = 'q-' + p.id + (idSuffix ? '-' + idSuffix : '');
-  return `<article class="q" id="${cid}" data-pid="${p.id}" data-tier="${tier}" data-len="${charLen(p.t)}" data-origin="${p.origin}" data-moods="${(p.m || []).join(' ')}" data-scenes="${(p.s || []).join(' ')}" data-places="${(p.pl || []).join(' ')}">
+  return `<article class="q" id="${cid}" data-pid="${p.id}" data-tier="${tier}" data-len="${charLen(p.t)}" data-origin="${p.origin}" data-scenes="${(p.s || []).join(' ')}" data-places="${(p.pl || []).join(' ')}">
   <blockquote class="q-text">${esc(p.t)}</blockquote>
   ${p.o ? `<p class="q-o">${esc(p.o)}</p>` : ''}
   ${p.x ? `<p class="q-x">${esc(p.x)}</p>` : ''}
@@ -130,7 +130,6 @@ export function card(p, R, { showScenes = true, idSuffix = '' } = {}) {
   <div class="q-act">
     <button class="btn-copy" data-copy="${esc(p.t)}">复制</button>
     <button class="btn-copy alt" data-copy="${esc(p.t + (src ? ' —— ' + src : ''))}">带出处复制</button>
-    <button class="btn-fav" data-fav="${p.id}" aria-label="收藏">☆</button>
   </div>
 </article>`;
 }
@@ -181,8 +180,8 @@ export function cardListByScene(list, D, R, opts) {
   }).join('') + `</div>`;
 }
 
-// 筛选条
-export function filterBar(moods) {
+// 筛选条（长度 / 来源；场景页不再提供"按心情"细分）
+export function filterBar() {
   return `<div class="filters" data-filters>
   <div class="f-row">
     <span class="f-label">长度</span>
@@ -198,11 +197,6 @@ export function filterBar(moods) {
     <button class="chip" data-f="origin" data-v="modern">近现代</button>
     <button class="chip" data-f="origin" data-v="world">外国</button>
   </div>
-  ${moods && moods.length ? `<div class="f-row">
-    <span class="f-label">心情</span>
-    <button class="chip on" data-f="mood" data-v="">不限</button>
-    ${moods.map(m => `<button class="chip" data-f="mood" data-v="${m.id}">${esc(m.name)}</button>`).join('')}
-  </div>` : ''}
   <div class="f-count"><span data-count></span> 句</div>
 </div>`;
 }

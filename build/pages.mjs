@@ -101,7 +101,7 @@ export function scenePage(D, s) {
 </section>`;
 
   const content = `<div class="wrap">
-  ${filterBar(usedMoods)}
+  ${filterBar()}
   ${cardList(list, R2, { showScenes: true })}
   <section class="also">
     <h2>同一类里的其他处境</h2>
