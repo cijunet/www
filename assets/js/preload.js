@@ -39,7 +39,7 @@ function pump() {
     do { i = queue.shift(); } while (i !== undefined && isShardInWorker(i));
     if (i === undefined) { if (running === 0) report({ idle: true }); return; }
     running++;
-    pushShard(i, { timeout: 25000, retries: 2 })
+    pushShard(i, { timeout: 45000, retries: 2 })
       .catch(() => { /* 单片失败不影响整体：结果仍可用，只是该片内的句子暂不可精确校验 */ })
       .finally(() => {
         running--;
@@ -78,6 +78,6 @@ export function prioritize(list) {
   if (!want.length) return;
   queue = want.concat(queue.filter(i => !want.includes(i)));
   want.slice(0, MAX_CONC).forEach(i => {
-    pushShard(i, { timeout: 20000, retries: 2 }).catch(() => {}).finally(() => report());
+    pushShard(i, { timeout: 45000, retries: 2 }).catch(() => {}).finally(() => report());
   });
 }

@@ -14,7 +14,7 @@ export function pausePreload() { _paused = true; }
 export function resumePreload() { _paused = false; }
 export function isPaused() { return _paused; }
 
-function _abortable(url, { timeout = 15000, retries = 3, signal, cache = 'default' } = {}) {
+function _abortable(url, { timeout = 60000, retries = 3, signal, cache = 'default' } = {}) {
   const hit = _inflight.get(url);
   if (hit) return hit.p;                                  // 在途去重：同一 URL 并发只发一次
   const ctrl = new AbortController();

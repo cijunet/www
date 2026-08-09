@@ -114,8 +114,11 @@ export async function mountToday(root = document) {
   const box = root.querySelector('[data-today]');
   if (!box) return;
   const R = baseHref();
-  await initRecords(R);
-  const meta = await loadMeta(); setMeta(meta);
+  // 搜索数据（分片/索引）加载失败不致命：历史事件标题与「此日此句」主题仍可显示，
+  // 配句卡片降级为友好占位——否则首页今日板块会整体消失（曾出现：线上分片缺失时今日全不显示）。
+  let recordsOk = true;
+  try { await initRecords(R); } catch (e) { recordsOk = false; console.error('[today] 搜索数据不可用，今日板块降级显示', e); }
+  const meta = await loadMeta().catch(() => ({})); setMeta(meta);
 
   const now = new Date();
   const md = mmdd(now);
@@ -127,15 +130,17 @@ export async function mountToday(root = document) {
   paintHotChips(R, meta, realTheme, md);
 
   const events = ((hist && hist.days) ? hist.days[md] : null) || [];
-  const ranked = await Promise.all(events.map(async ev => {
-    const r = await eventGids(ev, 16);
-    return { ev, mc: r.count, gids: r.gids };
-  }));
+  const ranked = recordsOk
+    ? await Promise.all(events.map(async ev => {
+      const r = await eventGids(ev, 16);
+      return { ev, mc: r.count, gids: r.gids };
+    }))
+    : events.map(ev => ({ ev, mc: 0, gids: [] }));
   ranked.sort((a, b) => (b.mc > 0 ? 1 : 0) - (a.mc > 0 ? 1 : 0) || a.ev.y - b.ev.y);
   const showEv = ranked.slice(0, 4);
 
   const daySeed = Math.floor(now.getTime() / 86400000);   // 天级种子：同一天稳定，隔天换一批
-  const themeGids = await collectGids(realTheme, 8, daySeed);
+  const themeGids = recordsOk ? await collectGids(realTheme, 8, daySeed).catch(() => []) : [];
   const seen = new Set(); const allGids = [];
   themeGids.forEach(g => { if (!seen.has(g)) { seen.add(g); allGids.push(g); } });
   showEv.forEach(e => e.gids.forEach(g => { if (!seen.has(g)) { seen.add(g); allGids.push(g); } }));
@@ -144,7 +149,7 @@ export async function mountToday(root = document) {
   const all = allGids;
   if (!all.length && !showEv.length) { box.hidden = true; return; }
 
-  const cards = await getCards(all);
+  const cards = recordsOk ? await getCards(all).catch(() => []) : [];
   const cardByGid = new Map();
   cards.forEach(c => { if (c) cardByGid.set(c._gid, c); });
   const themeCards = themeGids.map(g => cardByGid.get(g)).filter(Boolean);
