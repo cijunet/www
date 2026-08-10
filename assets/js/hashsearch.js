@@ -1,5 +1,7 @@
 // HashSearch：全站唯一请求出口（架构 3.3）。禁止在别处直接 fetch()。
 // 必备能力：在途去重、超时取消(AbortController)、指数退避重试、失败抛错供 UI 降级（不白屏）。
+import { decompress } from './codec.js';
+
 const _inflight = new Map();  // url -> {p, ctrl}（在途去重 + 可取消）
 let _paused = false;          // 预载暂停闸门（搜索/导航时让路，架构 3.5）
 
@@ -54,4 +56,23 @@ export async function fetchText(url) {
 export async function fetchBytes(base, bareName, ext, opts) {
   const ab = await _abortable(base + 'data/' + bareName + '.' + ext, opts);
   return new Uint8Array(ab);
+}
+
+// 预压缩 JSON 统一加载：按能力优先 brotli → gzip → 明文（明文兼容旧部署没有 .gz 文件）。
+// 供 history.json / meta.json / geo.json 等「非哈希命名」的 JSON 数据用，省 70%+ 传输。
+export async function fetchJSON(base, name) {
+  const cands = _supportsBr
+    ? [name + '.br', name + '.gz', name]
+    : [name + '.gz', name];
+  for (const p of cands) {
+    try {
+      const ab = await _abortable(base + 'data/' + p, { cache: 'force-cache', timeout: 30000 });
+      if (p.endsWith('.br') || p.endsWith('.gz')) {
+        const dec = await decompress(new Uint8Array(ab), p.split('.').pop());
+        return JSON.parse(new TextDecoder().decode(dec));
+      }
+      return JSON.parse(new TextDecoder().decode(new Uint8Array(ab)));
+    } catch (e) { /* 404 / 解码失败 → 尝试下一候选 */ }
+  }
+  throw new Error('JSON 加载失败: ' + name);
 }

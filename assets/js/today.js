@@ -1,17 +1,14 @@
 // 今日 · 历史上的今天 + 节气/节日 + 配几句词句。
-// 数据来自 data/history.json（构建期抓取）+ 新分片运行时的倒排检索，不再依赖 pieces.msgpack。
-import { initRecords, getCards, cardsForFilter, gidsForQuery } from './records.js';
+// 数据源（架构 7.x）：构建期预生成的 data/today.json（366 天事件→配句 gid）+ 今日迷你分片，
+// 首页今日板块不再依赖 index / 主分片 —— 首屏数据从 ~1.9MB 降到 ~0.5MB，且渲染不被索引下载阻塞。
+// 渲染分两段：第一段（today.json + meta 就绪）立刻出标题/事件/热词；第二段迷你分片到货后渐进补卡片。
 import { renderCard, setMeta } from './card.js';
 import { loadMeta } from './meta.js';
 import { baseHref, esc as _esc } from './util.js';
+import { fetchJSON, fetchBytes, pickCompress } from './hashsearch.js';
+import { decompress, decodeMsgpack, sha256hex } from './codec.js';
+import { dbGet, dbPut } from './db.js';
 
-const SEASON_KW = {
-  spring: ['春', '花', '柳', '燕', '莺', '桃', '杏', '草', '绿', '风'],
-  summer: ['夏', '暑', '荷', '蝉', '凉', '扇', '蛙', '雷', '骤雨', '荔枝', '瓜'],
-  autumn: ['秋', '月', '霜', '枫', '菊', '雁', '桂', '梧', '黄叶', '愁'],
-  winter: ['雪', '寒', '梅', '炉', '冬', '冰', '炭', '腊', '岁暮']
-};
-const SEASON_LABEL = { spring: '春日', summer: '夏日', autumn: '秋日', winter: '冬日' };
 const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
 const CHIP_CAL = [
   { f: '0101', t: '0105', ids: ['kuanian', 'yanhuo', 'jijie'] },
@@ -43,136 +40,120 @@ const THEME_CHIPS = {
   '立冬': ['handong'], '小雪': ['chuxue'], '大雪': ['chuxue', 'mianhua'], '冬至': ['handong', 'chihe']
 };
 
-function seasonByMonth(m) {
-  return (m >= 3 && m <= 5) ? 'spring' : (m >= 6 && m <= 8) ? 'summer' : (m >= 9 && m <= 11) ? 'autumn' : 'winter';
-}
 function mmdd(now) {
   return ('0' + (now.getMonth() + 1)).slice(-2) + ('0' + now.getDate()).slice(-2);
 }
 function shortName(name) { return name.split(/[、·，]/)[0]; }
 
-async function loadHistory(R) {
-  try {
-    const r = await fetch(R + 'data/history.json', { cache: 'force-cache' });
-    if (r.ok) return await r.json();
-  } catch (e) {}
-  return null;
-}
-function todayTheme(hist, y, md, month) {
-  const cal = hist && hist.years ? hist.years[y] : null;
-  if (cal && cal[md]) { const f = cal[md]; return { n: f.n, kind: f.kind || '节日', scenes: f.scenes || [], kw: f.kw || [], s: f.s }; }
-  if (hist && hist.terms && hist.terms[md]) { const t = hist.terms[md]; return { n: t.n, kind: '节气', scenes: [], kw: [], s: t.s }; }
-  const s = seasonByMonth(month);
-  return { n: SEASON_LABEL[s], kind: '时令', scenes: [], kw: [], s };
+// 主线程首次 msgpack 解码前注入解码器（经典脚本，与 search-worker importScripts 同一个文件；幂等）
+let _mpReady = null;
+function ensureMsgpackGlobal() {
+  if (globalThis.msgpack) return Promise.resolve();
+  if (_mpReady) return _mpReady;
+  _mpReady = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = baseHref() + 'assets/msgpack.min.js';
+    s.onload = () => res();
+    s.onerror = () => { _mpReady = null; rej(new Error('msgpack 加载失败')); };
+    document.head.appendChild(s);
+  });
+  return _mpReady;
 }
 
-// 主题配句：按场景/关键词命中倒排，加权聚合（不取全文，最后统一 getCards）。
-// seed 让每天从倒排表的不同位置起取，否则「此日此句」永远是同一批最小 gid。
-async function collectGids(theme, limit = 8, seed = 0) {
-  const seen = new Set(), scored = [];
-  const addList = (list, w) => {
-    if (!list || !list.length) return;
-    const off = list.length ? seed % list.length : 0;
-    for (let k = 0; k < list.length; k++) {
-      const gid = list[(off + k) % list.length];
-      if (gid == null || seen.has(gid)) continue;
-      seen.add(gid); scored.push([gid, w]);
+// 迷你分片：IDB 缓存优先（哈希名内容不可变 → 缓存安全）→ miss 则拉取 + 校验 + 落库。
+// 与主分片同模式（datacache fetchVerify），版本变化时 dbClear 一并清空，不会残留旧数据。
+async function loadTodayShards(R, shards) {
+  await ensureMsgpackGlobal();
+  const out = new Map();
+  const ext = pickCompress();
+  await Promise.all(shards.map(async s => {
+    let buf = null, useExt = ext;
+    const cached = await dbGet('blobs', s.n).catch(() => null);
+    if (cached && cached.buf) {
+      const got = await sha256hex(cached.buf);
+      if (got === (cached.ext === 'br' ? s.hbr : s.hgz)) { buf = cached.buf; useExt = cached.ext; }
     }
-  };
-  for (const sid of (theme.scenes || [])) addList(await cardsForFilter({ s: sid }), 100);
-  for (const kw of (theme.kw || [])) addList(await gidsForQuery(kw), 60);
-  if (scored.length < 4 && theme.s && SEASON_KW[theme.s]) {
-    for (const kw of SEASON_KW[theme.s]) addList(await gidsForQuery(kw), 25);
-  }
-  scored.sort((a, b) => b[1] - a[1]);
-  return scored.slice(0, limit).map(x => x[0]);
-}
-async function eventGids(ev, cap = 16) {
-  // 关键词优先；配不到时用事件标题的 2-4 字滑窗词兜底（专名/罕见词也能捞一部分），
-  // 保证「历史上的今天」每条都能点出内容
-  const base = [...(ev.kw || [])].filter(Boolean);
-  const chars = String(ev.t || '').replace(/[0-9a-zA-Z\s,，。·、（）()〔〕—\-]/g, '');
-  const seen = new Set(); const kws = [];
-  for (const k of base) if (!seen.has(k)) { seen.add(k); kws.push(k); }
-  for (let len = 2; len <= 4 && kws.length < 14; len++) {
-    for (let i = 0; i + len <= chars.length && kws.length < 14; i++) {
-      const w = chars.slice(i, i + len);
-      if (!seen.has(w)) { seen.add(w); kws.push(w); }
+    if (!buf) {
+      buf = await fetchBytes(R, s.n, ext, { timeout: 45000 });
+      const want = ext === 'br' ? s.hbr : s.hgz;
+      const got = await sha256hex(buf);
+      if (got !== want) throw new Error('今日分片校验失败: ' + s.n + '.' + ext);
+      dbPut('blobs', s.n, { buf, ext }).catch(() => {});
     }
-  }
-  if (!kws.length) return { count: 0, gids: [] };
-  const hits = await Promise.all(kws.map(kw => gidsForQuery(kw).catch(() => [])));
-  const seenG = new Set(); let count = 0; const gids = [];
-  for (const hit of hits) {
-    if (hit.length) count++;
-    for (const gid of hit) if (!seenG.has(gid)) { seenG.add(gid); if (gids.length < cap) gids.push(gid); }
-  }
-  return { count, gids };
+    const dec = await decompress(buf, useExt);
+    const pack = await decodeMsgpack(dec);
+    for (const x of (pack.pieces || [])) {
+      if (x && x.r) { x.r._gid = x.g; out.set(x.g, x.r); }
+    }
+  }));
+  return out;
 }
 
 export async function mountToday(root = document) {
   const box = root.querySelector('[data-today]');
   if (!box) return;
   const R = baseHref();
-  // 搜索数据（分片/索引）加载失败不致命：历史事件标题与「此日此句」主题仍可显示，
-  // 配句卡片降级为友好占位——否则首页今日板块会整体消失（曾出现：线上分片缺失时今日全不显示）。
-  let recordsOk = true;
-  try { await initRecords(R); } catch (e) { recordsOk = false; console.error('[today] 搜索数据不可用，今日板块降级显示', e); }
-  const meta = await loadMeta().catch(() => ({})); setMeta(meta);
 
+  // 第一段：只依赖 today.json + meta（合计 ~150KB），今日板块即刻可见
+  const meta = await loadMeta().catch(() => ({})); setMeta(meta);
   const now = new Date();
   const md = mmdd(now);
-  const y = now.getFullYear();
-  const hist = await loadHistory(R);
-  const realTheme = todayTheme(hist, y, md, now.getMonth() + 1);
 
-  // 顶部热词 chips（hero-hot）
-  paintHotChips(R, meta, realTheme, md);
+  let tj = null;
+  try { tj = await fetchJSON(R, 'today.json'); } catch (e) { console.error('[today] 今日数据包加载失败', e); }
+  const td = (tj && tj.days) ? tj.days[md] : null;
+  if (!td) {
+    // 数据缺失（闰日 0229 等无数据天）：正常降级，不误报网络错误
+    box.innerHTML = '<div class="t-head"><h2>今日</h2></div>'
+      + `<p class="empty">${now.getMonth() + 1}月${now.getDate()}日暂无历史事件记录，换个日子看看。</p>`;
+    box.hidden = false;
+    return;
+  }
 
-  const events = ((hist && hist.days) ? hist.days[md] : null) || [];
-  const ranked = recordsOk
-    ? await Promise.all(events.map(async ev => {
-      const r = await eventGids(ev, 16);
-      return { ev, mc: r.count, gids: r.gids };
-    }))
-    : events.map(ev => ({ ev, mc: 0, gids: [] }));
-  ranked.sort((a, b) => (b.mc > 0 ? 1 : 0) - (a.mc > 0 ? 1 : 0) || a.ev.y - b.ev.y);
-  const showEv = ranked.slice(0, 4);
+  const theme = td.theme || { n: '今日', kind: '', scenes: [], kw: [], s: '' };
+  // 事件排序：有配句的优先 + 年份升序（与旧版 ranked.sort 一致）
+  const showEv = (td.ev || []).slice()
+    .sort((a, b) => (b.count > 0 ? 1 : 0) - (a.count > 0 ? 1 : 0) || a.y - b.y)
+    .slice(0, 4);
 
-  const daySeed = Math.floor(now.getTime() / 86400000);   // 天级种子：同一天稳定，隔天换一批
-  const themeGids = recordsOk ? await collectGids(realTheme, 8, daySeed).catch(() => []) : [];
-  const seen = new Set(); const allGids = [];
-  themeGids.forEach(g => { if (!seen.has(g)) { seen.add(g); allGids.push(g); } });
-  showEv.forEach(e => e.gids.forEach(g => { if (!seen.has(g)) { seen.add(g); allGids.push(g); } }));
-  // 全量取卡（去重后 ≤ 8 + 4×16 ≈ 72 条，量很小）：若 slice(0,16) 会把排位靠后事件的
-  // gids 挤出取卡名额，出现「显示可配 X 句但点开空」的不一致。
-  const all = allGids;
-  if (!all.length && !showEv.length) { box.hidden = true; return; }
-
-  const cards = recordsOk ? await getCards(all).catch(() => []) : [];
-  const cardByGid = new Map();
-  cards.forEach(c => { if (c) cardByGid.set(c._gid, c); });
-  const themeCards = themeGids.map(g => cardByGid.get(g)).filter(Boolean);
-  showEv.forEach(e => { e.cards = e.gids.map(g => cardByGid.get(g)).filter(Boolean); });
+  paintHotChips(R, meta, theme, md);
 
   const head = `<div class="t-head"><h2>今日 <span class="t-date">${now.getMonth() + 1}月${now.getDate()}日 · 星期${WEEK[now.getDay()]}</span></h2>`
-    + `<span class="t-tag">${realTheme.kind}·${_esc(realTheme.n)}</span></div>`;
+    + `<span class="t-tag">${theme.kind || ''}·${_esc(theme.n)}</span></div>`;
   const evHtml = showEv.length
     ? '<div class="t-sub-title">历史上的今天</div><ul class="t-events">'
       + showEv.map((e, i) => `<li class="t-ev-link" role="button" tabindex="0" data-ev="${i}">`
-        + `<b>${e.ev.y}</b><span>${_esc(e.ev.t)}</span>${e.cards.length > 0 ? '<em>可配 ' + e.cards.length + ' 句 ▸</em>' : '<em>查看 ▸</em>'}</li>`).join('')
+        + `<b>${e.y}</b><span>${_esc(e.t)}</span>${e.gids.length > 0 ? '<em>可配 ' + e.gids.length + ' 句 ▸</em>' : '<em>查看 ▸</em>'}</li>`).join('')
       + '</ul>'
     : '';
-  const phHtml = cards.length
-    ? '<div class="t-sub-title" data-today-label>此日此句</div><div class="q-list" data-today-list></div>'
-      + '<div class="t-foot"><button type="button" data-today-next>换一批</button><span class="t-page" data-today-page></span>'
-      + '<button type="button" class="t-back" data-today-back hidden>← 返回全部</button></div>'
-    : '';
+  const phHtml = '<div class="t-sub-title" data-today-label>此日此句</div><div class="q-list" data-today-list></div>'
+    + '<div class="t-foot"><button type="button" data-today-next>换一批</button><span class="t-page" data-today-page></span>'
+    + '<button type="button" class="t-back" data-today-back hidden>← 返回全部</button></div>';
   box.innerHTML = head + evHtml + phHtml;
   box.hidden = false;
-  if (!cards.length) return;
 
-  const PAGE = 4, listEl = box.querySelector('[data-today-list]');
+  const listEl = box.querySelector('[data-today-list]');
+  if (listEl) listEl.innerHTML = '<p class="empty">正在配句子…</p>';
+
+  // 第二段：迷你分片到货 → 卡片渐进补渲染（标题/事件早已显示）
+  let recs = new Map();
+  try {
+    recs = await loadTodayShards(R, tj.shards || []);
+  } catch (e) { console.error('[today] 迷你分片加载失败', e); }
+
+  const themeCards = td.themeGids.map(g => recs.get(g)).filter(Boolean);
+  showEv.forEach(e => { e.cards = e.gids.map(g => recs.get(g)).filter(Boolean); });
+
+  if (!recs.size) {
+    if (listEl) listEl.innerHTML = '<p class="empty">配句数据加载失败，稍后刷新再看看。</p>';
+    return;
+  }
+  if (!themeCards.length && !showEv.some(e => e.cards.length)) {
+    if (listEl) listEl.innerHTML = '<p class="empty">今天暂时没配到合适的句子，换个别的看看。</p>';
+    return;
+  }
+
+  const PAGE = 4;
   const labelEl = box.querySelector('[data-today-label]');
   const nextBtn = box.querySelector('[data-today-next]');
   const backBtn = box.querySelector('[data-today-back]');
@@ -184,7 +165,7 @@ export async function mountToday(root = document) {
     const list = activeList();
     const pages = Math.max(1, Math.ceil(list.length / PAGE));
     if (cur >= pages) cur = 0;
-    listEl.innerHTML = list.length
+    if (listEl) listEl.innerHTML = list.length
       ? list.slice(cur * PAGE, cur * PAGE + PAGE).map(c => renderCard(c, { R })).join('')
       : '<p class="empty">这个事件暂时没配到合适的句子，换个别的看看。</p>';
     if (pageEl) pageEl.textContent = pages > 1 ? ((cur + 1) + ' / ' + pages) : '';
@@ -193,8 +174,8 @@ export async function mountToday(root = document) {
   const setMode = idx => {
     mode = idx; cur = 0;
     evEls.forEach((el, i) => el.classList.toggle('on', i === idx));
-    if (idx < 0) { labelEl.textContent = '此日此句'; backBtn.hidden = true; }
-    else { const e = showEv[idx]; labelEl.textContent = `为「${e.ev.y}年·${e.ev.t}」配的句子`; backBtn.hidden = false; }
+    if (idx < 0) { if (labelEl) labelEl.textContent = '此日此句'; if (backBtn) backBtn.hidden = true; }
+    else { const e = showEv[idx]; if (labelEl) labelEl.textContent = `为「${e.y}年·${e.t}」配的句子`; if (backBtn) backBtn.hidden = false; }
     paint();
   };
   box.addEventListener('click', e => {
@@ -203,7 +184,7 @@ export async function mountToday(root = document) {
       const idx = Number(li.getAttribute('data-ev'));
       if (showEv[idx] == null) return;
       setMode(mode === idx ? -1 : idx);
-      if (mode >= 0) labelEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      if (mode >= 0 && labelEl) labelEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       return;
     }
     if (e.target.closest('[data-today-back]')) { setMode(-1); return; }

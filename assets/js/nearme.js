@@ -5,6 +5,7 @@ import { initRecords, getCards, cardsForFilter } from './records.js';
 import { renderCard, setMeta } from './card.js';
 import { loadMeta } from './meta.js';
 import { baseHref, esc as _esc } from './util.js';
+import { fetchJSON } from './hashsearch.js';
 
 const RINGS = [
   { max: 30, title: '就在此处', sub: '30 公里内' },
@@ -27,8 +28,7 @@ function fmtDist(km) {
 
 async function loadGeo(R) {
   try {
-    const r = await fetch(R + 'data/geo.json', { cache: 'force-cache' });
-    if (r.ok) return await r.json();
+    return await fetchJSON(R, 'geo.json');
   } catch (e) {}
   return [];
 }

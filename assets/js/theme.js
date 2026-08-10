@@ -1,7 +1,7 @@
 // 暗色模式：localStorage 优先，否则跟随系统偏好；切换时同步 <meta name=theme-color>（架构 3.9）。
 const KEY = 'ciju.theme';
-const LIGHT_COLOR = '#a8322d';   // 品牌红
-const DARK_COLOR = '#17110d';    // 深色背景
+const LIGHT_COLOR = '#9e3a2e';   // 宣纸朱红（印泥色）
+const DARK_COLOR = '#0f0f0f';    // 玄墨金暗色（近纯黑）
 
 function applyTheme(t) {
   const dark = t === 'dark';

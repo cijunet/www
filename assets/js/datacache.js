@@ -103,10 +103,3 @@ export async function getShard(i, opts) {
   try { localStorage.setItem(LOADED_KEY, JSON.stringify([..._loaded])); } catch {}
   return part;
 }
-
-// 内存压力：丢弃内存里的压缩字节，下次从 IndexedDB 重读（架构 3.4）
-export function evictMemory() {
-  _mem.shards.clear();
-  _mem.pinyin = null;
-  _mem.suggest = null;
-}
