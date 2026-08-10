@@ -2,17 +2,17 @@
 // 与主线程渲染之间的唯一数据出口（架构 3.3：所有字节仍经 HashSearch → datacache → Worker）。
 // 复用搜索页已建立的那个 Worker（initSearch 幂等），不会自建第二个。
 import {
-  initSearch, whenIndexReady, manifest, shardOf, pushShard, fetchItems, query, on
+  initSearch, ensureIndex, manifest, shardOf, pushShard, fetchItems, query, on
 } from './worker-client.js';
 import { loadMeta } from './meta.js';
 
 let initP = null;
 
 // 幂等且并发安全：缓存 Promise 本身，谁先调谁建，后来者复用同一次启动。
+// 仅需 Worker + manifest（提供 shardSize），不依赖 526KB 全文索引；索引由 ensureIndex() 在搜索页按需加载。
 export function initRecords(base) {
   if (!initP) {
     initP = initSearch(base)
-      .then(() => whenIndexReady())
       .catch(err => { initP = null; throw err; });
   }
   return initP;
@@ -56,7 +56,10 @@ export async function randomCards(n = 1) {
 
 // 单次查询 → gid 数组。gids 是 Int32Array（可转移对象），统一转成普通数组，
 // 否则调用方一 push/concat 就炸（定型数组没有 push）。
-function queryPromise(f, q = '', sort = '') {
+// 注意：核心索引(526KB)不随首屏加载，这里在「真正查询时」按需 ensureIndex()——
+// 首页卡片(random/related/today)走 getCards(by gid) 不需索引；只有筛选/搜索才触发索引加载。
+async function queryPromise(f, q = '', sort = '') {
+  await ensureIndex();
   return new Promise((resolve, reject) => {
     const rid = query({ q, f, sort, mode: q ? 'exact' : 'auto' });
     if (rid < 0) return reject(new Error('搜索服务未就绪'));

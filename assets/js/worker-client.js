@@ -4,6 +4,7 @@
 import {
   setDataBase, getManifest, getIndex, getPinyin, getShard
 } from './datacache.js';
+import { baseHref } from './util.js';
 
 let W = null;
 let BASE = '';
@@ -31,7 +32,7 @@ export function isShardInWorker(i) { return inWorker.has(i); }
 export function workerShardCount() { return inWorker.size; }
 
 // 索引就绪门闩：Worker 处理 'idx' 是异步解压，若紧接着发查询会被判「索引尚未就绪」。
-// 所有非搜索页功能（随机/今日/附近/相关）查询前都必须先 await whenIndexReady()。
+// ensureIndex() 内部 await 它；records.js 的 queryPromise 在每次查询前自动 ensureIndex()。
 let idxReady = false, idxResolve = null;
 const idxReadyP = new Promise(res => { idxResolve = res; });
 export function whenIndexReady() { return idxReady ? Promise.resolve() : idxReadyP; }
@@ -66,12 +67,26 @@ export function initSearch(baseUrl) {
 
     MANIFEST = await getManifest();
     emit('ready', { what: 'manifest', manifest: MANIFEST });
-
-    const { buf, ext } = await getIndex();
-    W.postMessage({ t: 'idx', buf, ext });
+    // 仅把 manifest 交给 Worker（提供 shardSize 用于 gid→分片映射）。
+    // 核心索引(526KB)不再随首屏加载——由 ensureIndex() 在真正搜索时才拉取。
+    W.postMessage({ t: 'manifest', m: MANIFEST });
     return MANIFEST;
   })().catch(err => { INIT = null; W = null; throw err; });
   return INIT;
+}
+
+// 加载核心搜索索引（仅搜索页需要）。幂等、可并发。首屏卡片渲染不依赖它。
+let IDX_P = null;
+export function ensureIndex() {
+  if (IDX_P) return IDX_P;
+  IDX_P = (async () => {
+    if (!W) await initSearch(BASE || baseHref());
+    const { buf, ext } = await getIndex();
+    W.postMessage({ t: 'idx', buf, ext });
+    await whenIndexReady();
+    return true;
+  })().catch(err => { IDX_P = null; throw err; });
+  return IDX_P;
 }
 
 export function query(o) {

@@ -19,6 +19,7 @@
 importScripts('../msgpack.min.js');
 
 var IDX = null;          // {tks, tokMap, pst, off, lens, cls, total, shardSize, names}
+var MAN = null;          // 来自 manifest（含 shardSize）——分片映射不依赖 index，故首屏可不加载 index
 var PY = null;           // {full:[], init:[]}
 var SHARDS = new Map();  // shardIndex -> 记录数组
 var LAST = null;         // 最近一次查询（分片到货后自动重算，实现渐进精确化）
@@ -141,12 +142,12 @@ async function loadShard(i, buf, ext) {
   if (LAST && LAST_PENDING > 0) runQuery(LAST, true);
 }
 function recordOf(gid) {
-  var size = IDX ? IDX.shardSize : 400;
+  var size = (MAN || IDX || {}).shardSize || 400;
   var si = Math.floor(gid / size);
   var arr = SHARDS.get(si);
   return arr ? arr[gid % size] : null;
 }
-function shardOf(gid) { return Math.floor(gid / (IDX ? IDX.shardSize : 400)); }
+function shardOf(gid) { return Math.floor(gid / (MAN ? MAN.shardSize : (IDX ? IDX.shardSize : 400))); }
 
 /* ── 三种搜索 ── */
 // 精确：整串作为一个短语。倒排求交拿候选，再用已解码分片验证子串；
@@ -340,6 +341,7 @@ self.onmessage = async function (e) {
   var m = e.data || {};
   try {
     if (m.t === 'idx') await loadIndex(m.buf, m.ext);
+    else if (m.t === 'manifest') { MAN = m.m; }
     else if (m.t === 'py') {
       var raw = await inflate(m.buf, m.ext);
       var p = msgpack.decode(raw);

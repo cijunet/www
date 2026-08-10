@@ -1,7 +1,7 @@
 // 壳启动（架构 3.1 / 3.5）：页面本身零数据可用，脚本起来后才去挂搜索能力。
 // 顺序严格按「先能用、再变快、最后变全」：
 //   骨架已在 HTML 里 → manifest（版本原子性）→ 核心索引（搜索即刻可用）→ 后台补分片（结果逐步精确）。
-import { initSearch, on, shardCount } from './worker-client.js';
+import { initSearch, ensureIndex, on, shardCount } from './worker-client.js';
 import { startPreload, onProgress } from './preload.js';
 import { mountSearch } from './search-ui.js';
 import { baseHref } from './util.js';
@@ -37,11 +37,12 @@ async function boot() {
   const paint = mountProgressBar();
   onProgress(paint);
 
-  // 索引一到位就开搜；分片在后台慢慢补，结果会自己从「候选」收敛成「精确」
+  // 首屏只建 Worker + manifest（不发 526KB 索引）；索引在搜索页显式加载，分片到位后开搜
   on('ready', m => { if (m.what === 'idx') startPreload(); });
 
   try {
     await initSearch(base);
+    await ensureIndex();          // 搜索页才加载核心索引
   } catch (e) {
     const st = document.querySelector('[data-status]');
     if (st) st.textContent = '搜索数据加载失败：' + (e && e.message || e) + '。请检查网络后刷新。';

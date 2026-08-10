@@ -12,28 +12,26 @@ import { mountRelated } from './related.js';
 import { mountSearchDelegate, isV2 } from './search-delegate.js';
 import { mountDetail } from './detail.js';
 import { mountPerf } from './perf.js';
-import { baseHref } from './util.js';
-import { getManifest, getShard, getSuggest } from './datacache.js';
-import { initSearch, pushShard, ensurePinyin } from './worker-client.js';
+import { getManifest, getShard, getIndex, getPinyin, getSuggest } from './datacache.js';
 
-// 首页后台预载全量数据：今日板块从主分片取句（单一数据源，无独立重复包），
-// 同时把索引/全部分片/拼音/建议喂给搜索 Worker，使搜索首屏即可用。
-// 渲染不被阻塞——HTML 已即时可见，数据在后台渐进下载；datacache 去重保证每份只下一遍。
+// 首页后台预载：只下载主分片（今日板块取句 + 搜索记录共用同一份，datacache 去重只下一遍）。
+// 渐进优先预载（顺序补齐，全程 fire-and-forget，不阻塞首屏 paint）：
+//   P1 首屏数据(today.json + meta + geo) 已由挂载函数拉起 —— 体积小，首屏立即可见；
+//   P2 主分片 ×6（首页随机/相关/今日卡片、全站浏览）—— 先下，保证首屏词句最快出现；
+//   P3 搜索索引 + 拼音 + 建议(共 906KB) —— P2 完成后再下，后台补齐，用户随时搜索/筛选都即时。
+// datacache 的 inflight 去重 + IDB 缓存保证：搜索页 ensureIndex 直接复用，绝不重复下载。
 function prefetchAll() {
-  const base = baseHref();
   (async () => {
     try {
       const m = await getManifest();
-      // 先并行触发全量主分片下载（今日板块 + 搜索记录共用同一份，datacache 去重只下一遍）
-      const shardP = m.shards.map((_, i) => getShard(i).catch(() => {}));
-      // 同时启动搜索 Worker（下索引），与分片下载并行，不互相阻塞
-      const initP = initSearch(base).catch(() => {});
-      await Promise.all(shardP);
-      await initP;
-      // 把已下载的分片喂给 Worker（命中缓存不再请求网络）
-      for (let i = 0; i < m.shards.length; i++) pushShard(i);
-      ensurePinyin();
-      getSuggest().catch(() => {});
+      // P2：主分片（首页卡片、全站浏览所需）—— 优先，首屏词句最快出现
+      await Promise.all(m.shards.map((_, i) => getShard(i).catch(() => {})));
+      // P3：搜索数据（搜索/筛选即时；落 IDB 缓存后搜索页无需再下）
+      await Promise.all([
+        getIndex().catch(() => {}),
+        getPinyin().catch(() => {}),
+        getSuggest().catch(() => {}),
+      ]);
     } catch (e) { console.error('[prefetch] 后台预载失败', e); }
   })();
 }
