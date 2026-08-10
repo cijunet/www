@@ -5,12 +5,9 @@ import { decompress } from './codec.js';
 const _inflight = new Map();  // url -> {p, ctrl}（在途去重 + 可取消）
 let _paused = false;          // 预载暂停闸门（搜索/导航时让路，架构 3.5）
 
-// 能力探测：是否支持 brotli 解压（决定默认压缩格式）
-const _supportsBr = (() => {
-  try { return typeof DecompressionStream !== 'undefined' && !!new DecompressionStream('brotli'); }
-  catch { return false; }
-})();
-export function pickCompress() { return _supportsBr ? 'br' : 'gz'; }
+// 压缩格式：浏览器 DecompressionStream 标准仅保证 gzip/deflate/deflate-raw，brotli 不在其中；
+// 故运行期统一使用 gzip（构建亦只产出 .gz，见 build.mjs / dataplan.mjs）。
+export function pickCompress() { return 'gz'; }
 
 export function pausePreload() { _paused = true; }
 export function resumePreload() { _paused = false; }
@@ -58,21 +55,10 @@ export async function fetchBytes(base, bareName, ext, opts) {
   return new Uint8Array(ab);
 }
 
-// 预压缩 JSON 统一加载：按能力优先 brotli → gzip → 明文（明文兼容旧部署没有 .gz 文件）。
-// 供 history.json / meta.json / geo.json 等「非哈希命名」的 JSON 数据用，省 70%+ 传输。
+// 统一加载「非哈希命名」JSON 数据（history/meta/geo/today）。构建只产出 .gz，直接取之。
 export async function fetchJSON(base, name) {
-  const cands = _supportsBr
-    ? [name + '.br', name + '.gz', name]
-    : [name + '.gz', name];
-  for (const p of cands) {
-    try {
-      const ab = await _abortable(base + 'data/' + p, { cache: 'force-cache', timeout: 30000 });
-      if (p.endsWith('.br') || p.endsWith('.gz')) {
-        const dec = await decompress(new Uint8Array(ab), p.split('.').pop());
-        return JSON.parse(new TextDecoder().decode(dec));
-      }
-      return JSON.parse(new TextDecoder().decode(new Uint8Array(ab)));
-    } catch (e) { /* 404 / 解码失败 → 尝试下一候选 */ }
-  }
-  throw new Error('JSON 加载失败: ' + name);
+  const p = name + '.gz';
+  const ab = await _abortable(base + 'data/' + p, { cache: 'force-cache', timeout: 30000 });
+  const dec = await decompress(new Uint8Array(ab), 'gz');
+  return JSON.parse(new TextDecoder().decode(dec));
 }

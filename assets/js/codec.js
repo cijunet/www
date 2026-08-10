@@ -1,5 +1,5 @@
 // 解压 + 哈希工具（浏览器 / Node 共用，架构 3.4 下载后按校验值校验）。
-// 数据文件为 brotli / gzip 压缩的 msgpack；传输层用内容哈希命名，拉取后先校验再使用。
+// 数据文件为 gzip 压缩的 msgpack；传输层用内容哈希命名，拉取后先校验再使用。
 
 // 浏览器与 Node 都有 DecompressionStream（Node18+）
 export async function decompress(buf, ext) {

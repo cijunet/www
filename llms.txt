@@ -38,4 +38,4 @@
 - 按作者检索：https://ciju.net/authors/
 - 关于本站：https://ciju.net/?view=about
 - 二十四节气：https://ciju.net/?view=jq
-- 结构化数据（明文 msgpack·gzip/brotli 双压缩·运行时加载）：https://ciju.net/data/
+- 结构化数据（明文 msgpack·gzip 压缩·运行时加载）：https://ciju.net/data/

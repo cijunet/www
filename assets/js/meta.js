@@ -1,5 +1,5 @@
 // 轻量元数据（场景/心情/地点/作者名映射），供卡片渲染、今日提示词、相关推荐展示用。
-// 构建期产出 data/meta.json（含 .gz/.br 预压缩）；这里只在首次需要时拉取一次并缓存。
+// 构建期产出 data/meta.json（仅 .gz 预压缩）；这里只在首次需要时拉取一次并缓存。
 // aslug = 作者名 → slug 的反查表：分面 token #a 存的是 slug，而分片记录里的 a 是作者名。
 import { baseHref } from './util.js';
 import { fetchJSON } from './hashsearch.js';

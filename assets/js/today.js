@@ -1,13 +1,13 @@
 // 今日 · 历史上的今天 + 节气/节日 + 配几句词句。
-// 数据源（架构 7.x）：构建期预生成的 data/today.json（366 天事件→配句 gid）+ 今日迷你分片，
-// 首页今日板块不再依赖 index / 主分片 —— 首屏数据从 ~1.9MB 降到 ~0.5MB，且渲染不被索引下载阻塞。
-// 渲染分两段：第一段（today.json + meta 就绪）立刻出标题/事件/热词；第二段迷你分片到货后渐进补卡片。
+// 数据源（架构 7.x 演进）：构建期只预生成 data/today.json（366 天事件→配句 gid 配置），
+// 实际记录由「主分片」按 gid 提供 —— 与全站单一数据源，今日板块不再有独立重复包。
+// 渲染分两段：第一段（today.json + meta 就绪）立刻出标题/事件/热词；第二段主分片到货后渐进补卡片。
 import { renderCard, setMeta } from './card.js';
 import { loadMeta } from './meta.js';
 import { baseHref, esc as _esc } from './util.js';
-import { fetchJSON, fetchBytes, pickCompress } from './hashsearch.js';
-import { decompress, decodeMsgpack, sha256hex } from './codec.js';
-import { dbGet, dbPut } from './db.js';
+import { fetchJSON } from './hashsearch.js';
+import { decompress, decodeMsgpack } from './codec.js';
+import { getManifest, getShard } from './datacache.js';
 
 const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
 const CHIP_CAL = [
@@ -60,30 +60,31 @@ function ensureMsgpackGlobal() {
   return _mpReady;
 }
 
-// 迷你分片：IDB 缓存优先（哈希名内容不可变 → 缓存安全）→ miss 则拉取 + 校验 + 落库。
-// 与主分片同模式（datacache fetchVerify），版本变化时 dbClear 一并清空，不会残留旧数据。
-async function loadTodayShards(R, shards) {
+// 今日记录改从「主分片」按 gid 取句（单一数据源，不再有独立重复包）：
+// gid 在 D.pieces 中的位置即全局整数下标，分片边界 = floor(gid / shardSize)，
+// 经 datacache 取压缩字节（IDB 缓存 + 版本校验，且与搜索 Worker 共享同一份下载），主线程解码。
+async function loadTodayRecords(gids) {
   await ensureMsgpackGlobal();
+  const m = await getManifest();
+  const shardSize = m.shardSize || 1000;
+  const byShard = new Map();
+  for (const g of gids) {
+    if (g == null) continue;
+    const si = Math.floor(g / shardSize);
+    if (!byShard.has(si)) byShard.set(si, []);
+    byShard.get(si).push(g);
+  }
   const out = new Map();
-  const ext = pickCompress();
-  await Promise.all(shards.map(async s => {
-    let buf = null, useExt = ext;
-    const cached = await dbGet('blobs', s.n).catch(() => null);
-    if (cached && cached.buf) {
-      const got = await sha256hex(cached.buf);
-      if (got === (cached.ext === 'br' ? s.hbr : s.hgz)) { buf = cached.buf; useExt = cached.ext; }
-    }
-    if (!buf) {
-      buf = await fetchBytes(R, s.n, ext, { timeout: 45000 });
-      const want = ext === 'br' ? s.hbr : s.hgz;
-      const got = await sha256hex(buf);
-      if (got !== want) throw new Error('今日分片校验失败: ' + s.n + '.' + ext);
-      dbPut('blobs', s.n, { buf, ext }).catch(() => {});
-    }
-    const dec = await decompress(buf, useExt);
+  await Promise.all([...byShard.entries()].map(async ([si, gs]) => {
+    let part;
+    try { part = await getShard(si); }
+    catch (e) { console.error('[today] 分片加载失败', si, e); return; }
+    const dec = await decompress(part.buf, part.ext);
     const pack = await decodeMsgpack(dec);
-    for (const x of (pack.pieces || [])) {
-      if (x && x.r) { x.r._gid = x.g; out.set(x.g, x.r); }
+    const pieces = pack.pieces || pack;
+    for (const g of gs) {
+      const rec = pieces[g % shardSize];
+      if (rec) { rec._gid = g; out.set(g, rec); }
     }
   }));
   return out;
@@ -135,11 +136,12 @@ export async function mountToday(root = document) {
   const listEl = box.querySelector('[data-today-list]');
   if (listEl) listEl.innerHTML = '<p class="empty">正在配句子…</p>';
 
-  // 第二段：迷你分片到货 → 卡片渐进补渲染（标题/事件早已显示）
+  // 第二段：主分片到货 → 卡片渐进补渲染（标题/事件早已显示）
   let recs = new Map();
   try {
-    recs = await loadTodayShards(R, tj.shards || []);
-  } catch (e) { console.error('[today] 迷你分片加载失败', e); }
+    const allGids = [...new Set([...(td.themeGids || []), ...showEv.flatMap(e => e.gids || [])])];
+    recs = await loadTodayRecords(allGids);
+  } catch (e) { console.error('[today] 主分片取句失败', e); }
 
   const themeCards = td.themeGids.map(g => recs.get(g)).filter(Boolean);
   showEv.forEach(e => { e.cards = e.gids.map(g => recs.get(g)).filter(Boolean); });
