@@ -1,12 +1,14 @@
 // 相关推荐「类似此刻」：给带 data-gid 的卡片各补 3 条同类词句。
-// 取句优先级与旧版一致：同场景 → 同心情 → 同作者。
+// 取句优先级（阶段 4·③ 新增「同一篇」后）：同作品 → 同场景 → 同心情 → 同作者。
+// 同一篇即「同作品拆句互为上下文推荐」：卡片有 w（作品）时，先把该作品的其他拆句
+// 作为最高优先池，同作品风格一致、上下文价值最高；无 w 或同篇不足时回落到原链路。
 //
 // 两条硬约束决定了这里的写法：
 //  1) 批量化 —— 详情页一屏可能有 80+ 张卡，逐卡问 Worker 会产生数百次往返，
 //     故「同类分面合并查一次 + 相关记录一次性取回」，往返数与卡片数无关。
 //  2) 懒加载 —— 取整条记录要加载对应分片，一次性处理全页卡片等于把整库拖下来，
 //     违背「首页/分类页零数据可用」。故只处理滚动进视口的卡片，用多少载多少。
-import { initRecords, getCards, cardsForFilter } from './records.js';
+import { initRecords, getCards, cardsForFilter, gidsForQuery } from './records.js';
 import { esc } from './card.js';
 import { loadMeta } from './meta.js';
 import { baseHref } from './util.js';
@@ -28,6 +30,7 @@ export async function mountRelated(root = document) {
   })()));
 
   const pools = new Map();          // "s:aimei" → gid[]，跨批次复用
+  const workPools = new Map();      // 作品名 → gid[]（同一篇池，跨批次复用）
   const done = new WeakSet();
 
   async function process(cards) {
@@ -61,7 +64,17 @@ export async function mountRelated(root = document) {
       try { pools.set(key, await cardsForFilter(f)); } catch (e) { pools.set(key, []); }
     }));
 
+    // ②' 同一篇池：批内卡片的作品名去重后逐个短语查询（只走倒排，不加载分片）。
+    // 精确短语匹配 w 字段 → 返回该作品下的全部拆句 gid；结果缓存跨批次复用。
+    const works = new Set();
+    for (const r of selfRecs) if (r.w) works.add(String(r.w).trim());
+    await Promise.all([...works].filter(w => !workPools.has(w)).map(async w => {
+      try { workPools.set(w, await gidsForQuery(w, { limit: 24 })); }
+      catch (e) { workPools.set(w, []); }
+    }));
+
     // ③ 为每张卡挑 3 条。用自身 gid 做旋转偏移，避免同场景的卡片推荐出一模一样的三句。
+    // 优先级（阶段 4·③）：同作品（同一篇）→ 同场景 → 同心情 → 同作者。
     const pick = (r) => {
       const out = [], seen = new Set([r._gid]);
       const drain = (list) => {
@@ -72,6 +85,7 @@ export async function mountRelated(root = document) {
           if (!seen.has(g)) { seen.add(g); out.push(g); }
         }
       };
+      if (r.w) drain(workPools.get(String(r.w).trim()));      // 同一篇：同作品拆句互为上下文
       (r.s || []).forEach(id => drain(pools.get('s:' + id)));
       (r.m || []).forEach(id => drain(pools.get('m:' + id)));
       const sl = slugOf(r); if (sl) drain(pools.get('a:' + sl));

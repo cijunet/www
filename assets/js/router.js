@@ -51,8 +51,6 @@ export function toFilter(st) {
   return Object.keys(f).length ? f : null;
 }
 
-export function hasFilter(st) { return !!toFilter(st); }
-
 // 「/」聚焦搜索框、Esc 退出（不打断正在输入的人：焦点已在输入框内时不拦截）
 export function bindShortcuts(input) {
   document.addEventListener('keydown', e => {

@@ -12,25 +12,35 @@ import { mountRelated } from './related.js';
 import { mountSearchDelegate, isV2 } from './search-delegate.js';
 import { mountDetail } from './detail.js';
 import { mountPerf } from './perf.js';
-import { getManifest, getShard, getIndex, getPinyin, getSuggest } from './datacache.js';
+import { mountWorks, mountWorksIndex, mountWorksDetail, ensureWorks, ensureWorksMeta } from './works.js';
+import { getManifest, getShard, getIndex, getSuggest } from './datacache.js';
 
 // 首页后台预载：只下载主分片（今日板块取句 + 搜索记录共用同一份，datacache 去重只下一遍）。
 // 渐进优先预载（顺序补齐，全程 fire-and-forget，不阻塞首屏 paint）：
 //   P1 首屏数据(today.json + meta + geo) 已由挂载函数拉起 —— 体积小，首屏立即可见；
-//   P2 主分片 ×6（首页随机/相关/今日卡片、全站浏览）—— 先下，保证首屏词句最快出现；
-//   P3 搜索索引 + 拼音 + 建议(共 906KB) —— P2 完成后再下，后台补齐，用户随时搜索/筛选都即时。
+//   P2 主分片 ×6（首页随机/相关/今日卡片、全站浏览）—— 先下，保证首屏词句最快出现；并发 ≤3 避免与首屏抢带宽；
+//   P3 搜索索引 + 建议 —— P2 完成后再下。拼音索引不预载（ensurePinyin 按需拉取，省 ~330KB 首访流量）。
 // datacache 的 inflight 去重 + IDB 缓存保证：搜索页 ensureIndex 直接复用，绝不重复下载。
 function prefetchAll() {
   (async () => {
     try {
       const m = await getManifest();
-      // P2：主分片（首页卡片、全站浏览所需）—— 优先，首屏词句最快出现
-      await Promise.all(m.shards.map((_, i) => getShard(i).catch(() => {})));
-      // P3：搜索数据（搜索/筛选即时；落 IDB 缓存后搜索页无需再下）
+      // P2：主分片（首页卡片、全站浏览所需）—— 优先，首屏词句最快出现；并发 ≤3，不与首屏抢带宽
+      let next = 0;
+      const worker = async () => {
+        while (next < m.shards.length) {
+          const k = next++;
+          await getShard(k).catch(() => {});
+        }
+      };
+      await Promise.all([worker(), worker(), worker()]);
+      // P3：搜索数据（搜索/筛选即时；落 IDB 缓存后搜索页无需再下）+ 原文库目录（73KB，栏目页即显）。
+      // 拼音索引不预载：ensurePinyin 已按需加载（拉丁/拼音输入时才拉），省 ~330KB 首访流量。
+      // 原文全文（works.json.gz 462KB）不预载：详情页按需拉取，IDB 缓存后同样秒开 —— 首访省 ~462KB。
       await Promise.all([
         getIndex().catch(() => {}),
-        getPinyin().catch(() => {}),
         getSuggest().catch(() => {}),
+        ensureWorksMeta().catch(() => {}),
       ]);
     } catch (e) { console.error('[prefetch] 后台预载失败', e); }
   })();
@@ -55,6 +65,11 @@ function boot() {
 
   // 阶段 I：详情/关于/节气视图（查询字符串驱动，复用 records/card/meta）
   mountDetail();
+
+  // 原文功能：卡片「查看全文」跳转详情页 + 原文库栏目页 / 详情页渲染
+  mountWorks();
+  mountWorksIndex();
+  mountWorksDetail();
 
   // 后台预载全量数据（今日取句 + 搜索就绪），不阻塞首屏渲染
   prefetchAll();

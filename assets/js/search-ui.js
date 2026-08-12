@@ -87,6 +87,7 @@ function cardHTML(rec, gid, terms) {
   </div>
   ${rec.n ? `<p class="q-note"><span>怎么用</span>${esc(rec.n)}</p>` : ''}
   ${scenes ? `<div class="q-scenes">${scenes}</div>` : ''}
+  ${rec.w ? `<a class="q-work" href="${R}works/?w=${encodeURIComponent(rec.w)}">查看原文 <i>↗</i></a>` : ''}
   <div class="q-act">
     <button class="btn-copy" data-copy="${copyPlain}">复制</button>
     <button class="btn-copy alt" data-copy="${copyFull}">带出处复制</button>

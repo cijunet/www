@@ -142,12 +142,12 @@ async function loadShard(i, buf, ext) {
   if (LAST && LAST_PENDING > 0) runQuery(LAST, true);
 }
 function recordOf(gid) {
-  var size = (MAN || IDX || {}).shardSize || 400;
+  var size = (MAN || IDX || {}).shardSize || 1900;
   var si = Math.floor(gid / size);
   var arr = SHARDS.get(si);
   return arr ? arr[gid % size] : null;
 }
-function shardOf(gid) { return Math.floor(gid / (MAN ? MAN.shardSize : (IDX ? IDX.shardSize : 400))); }
+function shardOf(gid) { return Math.floor(gid / (MAN ? MAN.shardSize : (IDX ? IDX.shardSize : 1900))); }
 
 /* ── 三种搜索 ── */
 // 精确：整串作为一个短语。倒排求交拿候选，再用已解码分片验证子串；

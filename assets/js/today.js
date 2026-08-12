@@ -66,7 +66,7 @@ function ensureMsgpackGlobal() {
 async function loadTodayRecords(gids) {
   await ensureMsgpackGlobal();
   const m = await getManifest();
-  const shardSize = m.shardSize || 1000;
+  const shardSize = m.shardSize || 1900;
   const byShard = new Map();
   for (const g of gids) {
     if (g == null) continue;
@@ -127,7 +127,8 @@ export async function mountToday(root = document) {
         + `<b>${e.y}</b><span>${_esc(e.t)}</span>${e.gids.length > 0 ? '<em>可配 ' + e.gids.length + ' 句 ▸</em>' : '<em>查看 ▸</em>'}</li>`).join('')
       + '</ul>'
     : '';
-  const phHtml = '<div class="t-sub-title" data-today-label>此日此句</div><div class="q-list" data-today-list></div>'
+  const phHtml = '<div class="t-sub-title"><span data-today-label>此日此句</span><span class="t-ev-desc-inline" data-today-desc hidden></span></div>'
+    + '<div class="q-list" data-today-list></div>'
     + '<div class="t-foot"><button type="button" data-today-next>换一批</button><span class="t-page" data-today-page></span>'
     + '<button type="button" class="t-back" data-today-back hidden>← 返回全部</button></div>';
   box.innerHTML = head + evHtml + phHtml;
@@ -157,6 +158,7 @@ export async function mountToday(root = document) {
 
   const PAGE = 4;
   const labelEl = box.querySelector('[data-today-label]');
+  const descEl = box.querySelector('[data-today-desc]');
   const nextBtn = box.querySelector('[data-today-next]');
   const backBtn = box.querySelector('[data-today-back]');
   const pageEl = box.querySelector('[data-today-page]');
@@ -176,8 +178,8 @@ export async function mountToday(root = document) {
   const setMode = idx => {
     mode = idx; cur = 0;
     evEls.forEach((el, i) => el.classList.toggle('on', i === idx));
-    if (idx < 0) { if (labelEl) labelEl.textContent = '此日此句'; if (backBtn) backBtn.hidden = true; }
-    else { const e = showEv[idx]; if (labelEl) labelEl.textContent = `为「${e.y}年·${e.t}」配的句子`; if (backBtn) backBtn.hidden = false; }
+    if (idx < 0) { if (labelEl) labelEl.textContent = '此日此句'; if (backBtn) backBtn.hidden = true; if (descEl) { descEl.hidden = true; descEl.textContent = ''; } }
+    else { const e = showEv[idx]; if (labelEl) labelEl.textContent = `为「${e.y}年·${e.t}」配的句子`; if (backBtn) backBtn.hidden = false; if (descEl) { if (e.d) { descEl.textContent = '　·　' + e.d; descEl.hidden = false; } else { descEl.hidden = true; descEl.textContent = ''; } } }
     paint();
   };
   box.addEventListener('click', e => {

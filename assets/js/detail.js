@@ -18,7 +18,9 @@ const HUB = {
   '/authors/': { kind: 'author', facet: 'a',  nameKey: 'authors', plural: 'authors', title: '作者' }
 };
 
-const CAP = 300;   // 单页渲染上限，避免超大作者页（如「佚名」）一次性撑爆 DOM
+const PAGE = 300;   // 每批渲染 300 条：既不一次撑爆 DOM，也不再截断——余量由「加载更多」按需追加
+// 当前列表的分页状态（同一时刻页面上只有一个列表：作者/场景/心情/地点详情 或 大类详情）
+let LIST = null;    // { root, gids, shown, R }
 
 function curPath() {
   const p = location.pathname.replace(/index\.html$/, '/');
@@ -83,25 +85,41 @@ function showDetail(cfg, id) {
     const meta = await loadMeta(); setMeta(meta);
     const entry = (meta[cfg.nameKey] || {})[id];
     if (!entry) return notFound(root, `没有找到这个${cfg.title}：${id}`);
+    // 阶段 D：作者档案（简介/生卒年/字号）挂到 entry，详情页 hero 展示
+    if (cfg.kind === 'author' && !entry.folk) {
+      const info = (meta.authorInfo || {})[entry.name];
+      if (info && !entry.desc) entry.desc = info.desc || '';
+      if (info && !entry._info) entry._info = info;
+    }
     const f = detailFiltersFromURL();
     const gids = await cardsForFilter({ [cfg.facet]: id, ...toFilterQuery(f) });
-    const recs = await getCards(gids.slice(0, CAP));
+    const recs = await getCards(gids.slice(0, PAGE));
     hideChrome(root);
     root.innerHTML = detailHTML(cfg, entry, gids, recs, R, meta, f);
     document.title = `${entry.name} - 词句`;
-    bindDetailFilters(root, cfg.facet, id);
+    bindDetailList(root, cfg.facet, id);
+    LIST = { root, gids, shown: Math.min(PAGE, gids.length), R };
   }).catch(e => console.error('[detail]', e));
 }
 
 function detailHero(cfg, entry, R, extra) {
   // 作者页：朝代并入标题行（苏轼 + 「宋」小标签），不再让朝代单独占一行；
   // 其余分类保留原 lead（描述/标签/年代）。作者无 desc 时不出 lead 行。
+  // 民间类型（佛经/古诗十九首/谚语/歌词…）：标题前加「民间」标识，不显示朝代。
   const isAuthor = cfg.kind === 'author';
-  const dyn = isAuthor ? (entry.d || '') : '';
+  const isFolk = isAuthor && entry.folk;
+  const secTitle = isFolk ? '民间' : cfg.title;
+  const dyn = (isAuthor && !isFolk) ? (entry.d || '') : '';
   const desc = isAuthor ? (entry.desc || '') : (entry.desc || entry.tag || entry.d || '');
+  const folkName = entry.name;
+  const h1 = isFolk ? `民间 · ${esc(folkName)}` : esc(entry.name);
+  // 阶段 D：作者档案补充行（生卒年 · 字号 · 籍贯）
+  const info = isAuthor && !isFolk ? (entry._info || null) : null;
+  const infoLine = info ? `<p class="a-info">${[info.years, info.zi, info.home].filter(Boolean).map(esc).join(' · ')}</p>` : '';
   return `<section class="page-hero"><div class="wrap">
-    <nav class="crumb"><a href="${R}">首页</a> › <a href="${R}${cfg.plural}/">${cfg.title}</a> › <span>${esc(entry.name)}</span></nav>
-    <h1>${esc(entry.name)}${dyn ? `<small>${esc(dyn)}</small>` : ''}</h1>
+    <nav class="crumb"><a href="${R}">首页</a> › <a href="${R}${cfg.plural}/">${secTitle}</a> › <span>${esc(folkName)}</span></nav>
+    <h1>${h1}${dyn ? `<small>${esc(dyn)}</small>` : ''}</h1>
+    ${infoLine}
     ${desc ? `<p class="lead">${esc(desc)}</p>` : ''}
     ${extra || ''}
   </div></section>`;
@@ -146,17 +164,54 @@ function paintFilterBar(bar, f) {
   });
 }
 function detailCardsHTML(recs, R, total) {
-  const stat = `<p class="stat">共 ${total} 句${total > CAP ? `（展示前 ${CAP}）` : ''}</p>`;
-  const cards = recs.length
-    ? `<div class="q-list">${recs.map(r => renderCard(r, { R })).join('')}</div>`
-    : '<p class="empty">这个分类还没有收录，正在补。</p>';
-  return stat + cards;
+  if (!total) return '<p class="empty">这个分类还没有收录，正在补。</p>';
+  const shown = Math.min(PAGE, total);
+  const rest = total - shown;
+  const stat = `<p class="stat" data-dstat>共 ${total} 句${rest > 0 ? ` · 已显示 ${shown} 句` : ''}</p>`;
+  const cards = `<div class="q-list" data-dcards>${recs.map(r => renderCard(r, { R })).join('')}</div>`;
+  const more = rest > 0
+    ? `<div class="more-wrap" data-dmore><button type="button" class="btn-more" data-more>加载更多（还有 ${rest} 句）</button></div>`
+    : '';
+  return stat + cards + more;
 }
-// 筛选点击：只重查并重绘词句列表，不刷新页面；URL 同步筛选状态
-function bindDetailFilters(root, facet, id) {
-  const bar = root.querySelector('[data-dfilters]');
-  if (!bar) return;
-  bar.addEventListener('click', async e => {
+// 追加下一批：只往 [data-dcards] 尾部插 HTML，不重绘已渲染部分（滚动位置不跳）。
+// 复制按钮走 clipboard.js 的 document 级事件委托，新插入的卡片无需二次绑定。
+async function loadMore(root) {
+  if (!LIST || LIST.root !== root) return;
+  const { gids, shown, R } = LIST;
+  const next = gids.slice(shown, shown + PAGE);
+  if (!next.length) return;
+  const recs = await getCards(next);           // 内部按需 pushShard，大分类是渐进下载
+  const box = root.querySelector('[data-dcards]');
+  if (box) box.insertAdjacentHTML('beforeend', recs.map(r => renderCard(r, { R })).join(''));
+  LIST.shown = shown + next.length;            // 按 gid 位置推进（而非 recs.length），个别缺卡也不会原地打转
+  paintMore(root);
+}
+function paintMore(root) {
+  if (!LIST) return;
+  const totalN = LIST.gids.length, rest = totalN - LIST.shown;
+  const stat = root.querySelector('[data-dstat]');
+  if (stat) stat.textContent = rest > 0 ? `共 ${totalN} 句 · 已显示 ${LIST.shown} 句` : `共 ${totalN} 句（已全部展开）`;
+  const wrap = root.querySelector('[data-dmore]');
+  if (!wrap) return;
+  if (rest <= 0) { wrap.remove(); return; }
+  const btn = wrap.querySelector('[data-more]');
+  if (btn) { btn.disabled = false; btn.textContent = `加载更多（还有 ${rest} 句）`; }
+}
+// 筛选点击 + 加载更多：监听点从筛选条上移到 #detail-root（列表区会被整段重绘，root 不会），一次绑定即可同时接管两者
+function bindDetailList(root, facet, id) {
+  if (root._dlBound) return;                 // 一个页面只绑一次（详情页为整页加载，root 不重建）
+  root._dlBound = true;
+  root.addEventListener('click', async e => {
+    const more = e.target.closest('[data-more]');
+    if (more) {
+      if (more.disabled) return;
+      const old = more.textContent;
+      more.disabled = true; more.textContent = '加载中…';
+      try { await loadMore(root); }
+      catch (err) { console.error('[more]', err); more.textContent = old; more.disabled = false; }
+      return;
+    }
     const btn = e.target.closest('[data-df]');
     if (!btn) return;
     const f = detailFiltersFromURL();
@@ -165,12 +220,14 @@ function bindDetailFilters(root, facet, id) {
     const sp = new URLSearchParams(location.search);
     for (const k of ['tier', 'origin']) { if (f[k]) sp.set(k, f[k]); else sp.delete(k); }
     try { history.replaceState({}, '', location.pathname + '?' + sp.toString()); } catch {}
-    paintFilterBar(bar, f);
+    const bar = root.querySelector('[data-dfilters]');
+    if (bar) paintFilterBar(bar, f);
     const R = baseHref();
     const gids = await cardsForFilter({ [facet]: id, ...toFilterQuery(f) });
-    const recs = await getCards(gids.slice(0, CAP));
+    const recs = await getCards(gids.slice(0, PAGE));
     const dl = root.querySelector('[data-dlist]');
     if (dl) dl.innerHTML = detailCardsHTML(recs, R, gids.length);
+    LIST = { root, gids, shown: Math.min(PAGE, gids.length), R };   // 换筛选 = 分页归零
   });
 }
 
@@ -182,16 +239,23 @@ function siblingHTML(cfg, entry, R, meta) {
       .filter(([, v]) => v.g === entry.g && v.name !== entry.name)
       .map(([sid, v]) => ({ name: v.name, url: `${R}scenes/?id=${sid}` }));
   } else if (cfg.kind === 'author') {
-    items = Object.entries(meta.authors || {})
-      .filter(([, v]) => v.d === entry.d && v.name !== entry.name).slice(0, 12)
-      .map(([slug, v]) => ({ name: v.name, url: `${R}authors/?id=${slug}` }));
+    if (entry.folk) {
+      items = Object.entries(meta.authors || {})
+        .filter(([, v]) => v.folk && v.name !== entry.name).slice(0, 12)
+        .map(([slug, v]) => ({ name: v.name, url: `${R}authors/?id=${slug}` }));
+    } else {
+      items = Object.entries(meta.authors || {})
+        .filter(([, v]) => !v.folk && v.d === entry.d && v.name !== entry.name).slice(0, 12)
+        .map(([slug, v]) => ({ name: v.name, url: `${R}authors/?id=${slug}` }));
+    }
   } else {
     items = Object.entries(meta[cfg.nameKey] || {})
       .filter(([, v]) => v.name !== entry.name)
       .map(([xid, v]) => ({ name: v.name, url: `${R}${cfg.plural}/?id=${xid}` }));
   }
   if (!items.length) return '';
-  return `<section class="also"><h2>换个${cfg.title}</h2>
+  const alsoTitle = (cfg.kind === 'author' && entry.folk) ? '民间类型' : cfg.title;
+  return `<section class="also"><h2>换个${alsoTitle}</h2>
     <div class="also-list">${items.map(it => `<a href="${it.url}">${esc(it.name)}</a>`).join('')}</div></section>`;
 }
 
@@ -204,7 +268,7 @@ function showGroupDetail(id) {
     const g = (meta.groups || {})[id];
     if (!g) return notFound(root, '没有找到这个大类：' + id);
     const gids = await cardsForFilter({ g: id, ...toFilterQuery(detailFiltersFromURL()) });
-    const recs = await getCards(gids.slice(0, CAP));
+    const recs = await getCards(gids.slice(0, PAGE));
     const f = detailFiltersFromURL();
     const sceneCards = Object.entries(meta.scenes || {})
       .filter(([, v]) => v.g === id)
@@ -223,7 +287,8 @@ function showGroupDetail(id) {
     <div data-dlist>${detailCardsHTML(recs, R, gids.length)}</div>
     <section class="also"><h2>换一类看看</h2><div class="also-list">${otherGroups}</div></section></div>`;
     document.title = `${g.name} - 词句`;
-    bindDetailFilters(root, 'g', id);
+    bindDetailList(root, 'g', id);
+    LIST = { root, gids, shown: Math.min(PAGE, gids.length), R };
   }).catch(e => console.error('[group]', e));
 }
 
@@ -238,7 +303,7 @@ function showJqDetail(id) {
     if (!j) return notFound(root, '没有找到这个节气：' + id);
     const sid = j.scene || j.id;
     const gids = await cardsForFilter({ s: sid });
-    const recs = await getCards(gids.slice(0, CAP));
+    const recs = await getCards(gids.slice(0, PAGE));
     const i = arr.indexOf(j);
     const prev = arr[(i + arr.length - 1) % arr.length];
     const next = arr[(i + 1) % arr.length];

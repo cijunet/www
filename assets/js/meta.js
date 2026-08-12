@@ -6,7 +6,8 @@ import { fetchJSON } from './hashsearch.js';
 
 let _promise = null;
 // 阶段 I：场景/心情/地点/作者改为 {name,desc,...} 富结构；新增 groups、jq（详情页查询串渲染需要）
-let _meta = { scenes: {}, moods: {}, places: {}, authors: {}, groups: {}, jq: [], aslug: {} };
+// 阶段 D：新增 authorInfo（作者名 → 档案：朝代/生卒年/字号/籍贯/简介/别名）
+let _meta = { scenes: {}, moods: {}, places: {}, authors: {}, groups: {}, jq: [], aslug: {}, authorInfo: {} };
 
 export async function loadMeta() {
   if (_promise) return _promise;
@@ -20,7 +21,8 @@ export async function loadMeta() {
         authors: j.authors || {},
         groups: j.groups || {},
         jq: Array.isArray(j.jq) ? j.jq : [],
-        aslug: j.aslug || {}
+        aslug: j.aslug || {},
+        authorInfo: j.authorInfo || {}
       };
     } catch (e) { /* meta 缺失不致命，卡片只是少显示场景名 */ }
     return _meta;

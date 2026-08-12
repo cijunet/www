@@ -1,19 +1,45 @@
 # Cloudflare 边缘缓存策略（阶段 G2）。
 # 注意：GitHub Pages 不读取 _headers（那是 Cloudflare/Netlify 语义）；
 # 在 GH Pages 下由 Service Worker（NetworkFirst + 版本化缓存键）等效实现。
-# 仅当为 ciju.net 套 Cloudflare 时才生效。哈希命名资源可安全 immutable 长缓存。
+# 仅当为 ciju.net 套 Cloudflare 时才生效。
+#
+# 哈希命名资源内容不可变 → immutable 长缓存：
+#   /data/*.mpack.gz（分片/索引/拼音/建议，文件名含内容哈希）
+#   /assets/*.png / *.svg（站点图标，几乎不变）
+# 非哈希命名资源会随发布更新，禁止长缓存（CDN 长缓存会让新版本永远拿不到）：
+#   /assets/js/*.js（ES 模块，SW 靠 network-first + 版本化缓存键保证更新）
+#   /assets/style.css / msgpack.min.js / manifest.webmanifest
+#   /data/*.gz（today/meta/geo，随数据构建更新）/ data/manifest.json
 
-/assets/*
+/assets/*.png
   Cache-Control: public, max-age=31536000, immutable
 
-/data/*
+/assets/*.svg
   Cache-Control: public, max-age=31536000, immutable
+
+/assets/*.js
+  Cache-Control: public, no-cache
+
+/assets/style.css
+  Cache-Control: public, no-cache
+
+/assets/msgpack.min.js
+  Cache-Control: public, no-cache
+
+/assets/manifest.webmanifest
+  Cache-Control: no-cache
+
+/data/*.mpack.gz
+  Cache-Control: public, max-age=31536000, immutable
+
+/data/*.gz
+  Cache-Control: public, no-cache
+
+/data/manifest.json
+  Cache-Control: no-cache
 
 /sw.js
   Cache-Control: no-cache
 
 /index.html
-  Cache-Control: no-cache
-
-/manifest.webmanifest
   Cache-Control: no-cache

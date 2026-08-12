@@ -40,6 +40,7 @@ export function renderCard(r, { R = '' } = {}) {
     + `<span class="q-tier t-${t}">${tierLabel[t]}</span></div>`
     + (r.n ? `<p class="q-note"><span>怎么用</span>${esc(r.n)}</p>` : '')
     + (extra.length ? `<p class="q-extra">${extra.join(' · ')}</p>` : '')
+    + (r.w ? `<a class="q-work" href="${R}works/?w=${encodeURIComponent(r.w)}">查看原文 <i>↗</i></a>` : '')
     + `<div class="q-act"><button class="btn-copy" data-copy="${esc(r.t)}" aria-label="复制这句">复制</button>`
     + `<button class="btn-copy alt" data-copy="${copyFull}" aria-label="复制带出处">带出处复制</button></div>`
     + `</article>`;

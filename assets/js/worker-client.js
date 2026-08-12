@@ -26,7 +26,7 @@ function emit(type, payload) {
 
 export function manifest() { return MANIFEST; }
 export function shardCount() { return MANIFEST ? MANIFEST.shards.length : 0; }
-export function shardSize() { return MANIFEST ? MANIFEST.shardSize : 400; }
+export function shardSize() { return MANIFEST ? MANIFEST.shardSize : 1900; }
 export function shardOf(gid) { return Math.floor(gid / shardSize()); }
 export function isShardInWorker(i) { return inWorker.has(i); }
 export function workerShardCount() { return inWorker.size; }
