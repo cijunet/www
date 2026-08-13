@@ -691,8 +691,12 @@ mark{background:linear-gradient(transparent 58%,rgba(158,58,46,.24) 0);color:inh
 .wd-hero h1{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .w-mode-badge{display:inline-block;font-size:11px;color:var(--zhu);border:1px solid var(--zhu-2);border-radius:999px;padding:1px 9px;vertical-align:middle}
 .wd-body{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:20px 22px;margin:14px 0;box-shadow:var(--shadow-sm)}
+.wd-speak{display:inline-flex;align-items:center;gap:5px;background:transparent;border:1px solid var(--zhu);color:var(--zhu);border-radius:999px;padding:3px 12px;font-size:12px;font-family:var(--sans);letter-spacing:.03em;cursor:pointer;transition:.15s;line-height:1.6;white-space:nowrap}
+.wd-speak:hover{background:var(--zhu-2);color:#fff}
+.wd-speak.on{background:var(--zhu);border-color:var(--zhu);color:#fff}
 .wd-body .q-work-text{font-family:var(--serif);font-size:17px;line-height:2.1;letter-spacing:.03em;color:var(--ink)}
-.wd-body .q-work-src{margin-top:14px;padding-top:10px;border-top:1px dashed var(--line-2);font-size:12.5px;color:var(--ink-3)}
+.wd-body .q-work-src{margin-top:14px;padding-top:10px;border-top:1px dashed var(--line-2);font-size:12.5px;color:var(--ink-3);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.wd-src-txt{flex:1;min-width:0}
 .wd-pieces{margin:6px 0 14px}
 .w-pieces{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr));gap:7px}
 .w-piece{display:block;background:var(--card);border:1px solid var(--line);border-radius:var(--r-s);padding:8px 11px;transition:.15s}
@@ -710,3 +714,215 @@ mark{background:linear-gradient(transparent 58%,rgba(158,58,46,.24) 0);color:inh
 .wd-author-desc{color:var(--ink)}
 .wd-author-more{margin-top:6px!important}
 .wd-author-more a{color:var(--zhu);text-decoration:none;border-bottom:1px dashed var(--zhu-2);font-size:12.8px}
+
+/* ═══════════════ 诗趣游戏（/games/）═══════════════ */
+.g-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(230px,100%),1fr));gap:14px;margin:14px 0}
+.g-card{position:relative;display:block;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:18px 16px 14px;box-shadow:var(--shadow-sm);transition:.18s;overflow:hidden}
+.g-best{position:absolute;top:12px;right:14px;font-size:12px;letter-spacing:2px;color:var(--gold)}
+.g-best i{font-style:normal;color:var(--line-2)}
+.g-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--g-c,#9e3a2e)}
+.g-card:hover{transform:translateY(-3px);box-shadow:var(--shadow);border-color:var(--g-c,#9e3a2e)}
+.g-card:hover .g-go{color:var(--g-c,#9e3a2e);border-color:var(--g-c,#9e3a2e)}
+.g-cinnabar{--g-c:#9e3a2e}.g-teal{--g-c:#2f6f5e}.g-indigo{--g-c:#4a5a8a}.g-gold{--g-c:#8a6d3b}.g-plum{--g-c:#7a4a6e}
+.g-icon{display:inline-block;font-size:26px;line-height:1;margin-bottom:8px}
+.g-card b{display:block;font-family:var(--serif);font-size:17px;letter-spacing:.06em;margin:2px 0 6px}
+.g-tag{display:inline-block;font-style:normal;font-size:10.5px;color:var(--g-c,#9e3a2e);border:1px solid var(--g-c,#9e3a2e);border-radius:999px;padding:0 8px;line-height:1.6;margin-bottom:8px}
+.g-card p{font-size:12.8px;color:var(--ink-3);line-height:1.65;margin:0}
+.g-go{display:inline-block;margin-top:10px;font-size:12.5px;color:var(--ink-2);border-bottom:1px dashed var(--line);transition:.15s}
+.g-note{font-size:12px;color:var(--ink-4);margin:4px 0 18px}
+
+/* 玩法通用 */
+.g-play{max-width:680px;margin:14px auto;padding:0 4px}
+.g-play-title{font-family:var(--serif);font-size:19px;letter-spacing:.1em;color:var(--ink);border-left:3px solid var(--zhu);padding-left:10px;margin:4px 0 12px;display:flex;align-items:center;gap:8px}
+.g-play-title span{flex:1}
+.g-back{margin:0 0 6px}
+.g-back a{font-size:12.5px;color:var(--ink-4);text-decoration:none;letter-spacing:.02em}
+.g-back a:hover{color:var(--zhu)}
+.g-back span{font-size:15px;margin-right:2px}
+.g-mist-links{margin-top:4px}
+.g-mist-links .g-wlink{margin-right:12px}
+.g-mute{background:none;border:0;font-size:15px;line-height:1;cursor:pointer;padding:3px 7px;border-radius:6px;transition:.15s;letter-spacing:0}
+.g-mute:hover{background:var(--line-2)}
+.g-stage{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:20px 18px;min-height:96px;box-shadow:var(--shadow-sm);position:relative}
+.g-qtext{font-family:var(--serif);font-size:17.5px;line-height:2.05;letter-spacing:.05em;color:var(--ink);text-align:center;margin:2px 0 6px}
+.g-blank{display:inline-block;min-width:2.1em;border-bottom:2px solid var(--zhu);text-align:center;margin:0 2px;color:var(--zhu);font-weight:700;cursor:pointer;transition:.15s}
+.g-blank.right{color:var(--teal,#2f6f5e);border-color:var(--teal,#2f6f5e)}
+.g-opts{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:14px 0 6px}
+.g-chip{background:var(--card);border:1px solid var(--line);border-radius:999px;padding:6px 15px;font-family:var(--serif);font-size:15px;color:var(--ink-2);transition:.14s;cursor:pointer;min-width:2em;min-height:34px;display:inline-flex;align-items:center;justify-content:center}
+.g-chip:hover:not(:disabled){border-color:var(--zhu-2);color:var(--zhu);transform:translateY(-1px)}
+.g-chip.used{opacity:.32;text-decoration:line-through}
+.g-chip.right{background:var(--teal,#2f6f5e);border-color:var(--teal,#2f6f5e);color:#fff}
+.g-chip.wide{flex:1;min-width:min(200px,46%);border-radius:10px;padding:10px 12px;font-family:var(--serif);font-size:14.5px}
+.g-src{font-size:12.8px;color:var(--ink-3);text-align:center;min-height:20px;margin-top:8px}
+.g-wlink{color:var(--zhu);text-decoration:none;border-bottom:1px dashed var(--zhu-2);font-size:12.5px;margin-left:6px}
+.g-score{display:flex;gap:10px;align-items:baseline;justify-content:center;margin:10px 0 2px;font-size:13.5px;color:var(--ink-2)}
+.g-score-cur{font-size:21px;font-family:var(--serif);color:var(--zhu)}
+.g-score-combo{font-size:12px;color:var(--gold);opacity:0;transition:.2s}
+.g-btn{background:var(--zhu);border:0;border-radius:999px;color:#fff;padding:9px 24px;font-size:14.5px;font-family:var(--serif);letter-spacing:.08em;cursor:pointer;transition:.15s;min-height:38px;display:inline-flex;align-items:center;justify-content:center}
+.g-btn.sm{min-height:34px}
+.g-btn:hover{background:var(--zhu-2);transform:translateY(-1px)}
+.g-btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink-2)}
+.g-done{text-align:center;padding:18px 8px}
+.g-done b{font-family:var(--serif);font-size:20px;letter-spacing:.1em;display:block;margin-bottom:8px}
+.g-done p{color:var(--ink-3);font-size:14px;margin:4px 0 14px}
+.g-done em{font-style:normal;color:var(--zhu);font-size:22px;font-family:var(--serif)}
+
+/* 填空 */
+.g-scene-q{font-size:13px;color:var(--ink-4);text-align:center;margin:2px 0}
+
+
+/* 飞花令 */
+.g-fh-tip{text-align:center;color:var(--ink-3);font-size:13.5px;margin:0}
+.g-fh-char{font-family:var(--serif);font-size:64px;line-height:1.3;text-align:center;color:var(--zhu);text-shadow:0 0 18px rgba(158,58,46,.25);letter-spacing:.1em;margin:2px 0}
+.g-fh-rule{font-size:12.8px;color:var(--ink-3);text-align:center;line-height:1.7;margin:4px 0 8px}
+.g-fh-time{text-align:center;font-size:13.5px;color:var(--ink-2)}
+.g-fh-time em{font-style:normal;color:var(--zhu);font-family:var(--serif);font-size:16px}
+.g-fh-form{display:flex;gap:8px;width:100%;max-width:520px;margin:0 auto}
+.g-input{flex:1;min-width:0;padding:9px 13px;border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--ink);font-size:14.5px;font-family:var(--serif)}
+.g-input:focus{outline:none;border-color:var(--zhu-2)}
+
+/* 拼句 */
+.g-rb-title{font-family:var(--serif);font-size:15.5px;text-align:center;color:var(--ink-2);margin:0 0 2px}
+.g-rb-sub{display:block;font-size:11.8px;color:var(--ink-4);margin-top:2px;font-family:var(--sans)}
+.g-rb-pool{display:flex;flex-direction:column;gap:8px;width:100%;max-width:520px;margin:6px auto 0}
+.g-rb-card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 13px;font-family:var(--serif);font-size:14.5px;color:var(--ink-2);text-align:left;cursor:pointer;transition:.15s;line-height:1.55}
+.g-rb-card:hover:not(.used){border-color:var(--zhu-2);transform:translateX(3px)}
+.g-rb-card.used{opacity:.4;pointer-events:none;text-decoration:line-through}
+.g-rb-card.intr{border-color:var(--gold);color:var(--gold);font-style:italic}
+.g-rb-line{font-family:var(--serif);font-size:16px;line-height:1.9;color:var(--ink);text-align:center;animation:gIn .35s ease}
+.g-lives{color:var(--zhu);font-size:13px}
+.g-lives.bad{color:var(--zhu);font-weight:700}
+.g-score-cur2{color:var(--gold);font-size:13px}
+
+/* 反馈动效 */
+.shake{animation:gShake .42s}
+@keyframes gShake{0%,100%{transform:translateX(0)}20%{transform:translateX(-7px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(3px)}}
+@keyframes gIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.g-burst{position:fixed;pointer-events:none;z-index:999;font-size:14px;animation:gBurst .85s ease-out forwards}
+.g-burst.gold{color:var(--gold)}
+.g-burst.ink{color:var(--ink-4);font-size:10px}
+@keyframes gBurst{from{opacity:1;transform:translate(0,0) scale(1)}to{opacity:0;transform:translate(var(--dx),var(--dy)) scale(.6)}}
+
+/* ── 段位徽章（朱文印）与段位条 ── */
+.g-rankbar{margin:10px 0 2px}
+.g-rank-inner{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:10px 16px;box-shadow:var(--shadow-sm);flex-wrap:wrap}
+.g-rank{display:inline-flex;align-items:center;justify-content:center;background:var(--zhu);color:#fff;font-family:var(--serif);font-size:13px;letter-spacing:.18em;border-radius:6px;padding:4px 12px;box-shadow:inset 0 0 0 2px var(--card),0 0 0 1px var(--zhu);font-weight:700}
+.g-rank-lg{font-size:16px;padding:6px 16px}
+.g-rank-stars{font-family:var(--serif);color:var(--gold);font-size:15px;letter-spacing:.05em}
+.g-rank-plays{font-size:12.5px;color:var(--ink-3)}
+.g-rank-next{font-size:12.5px;color:var(--ink-4)}
+.g-rank-prog{flex:1;min-width:120px;height:6px;border-radius:999px;background:var(--line-2);overflow:hidden}
+.g-rank-prog i{display:block;height:100%;background:linear-gradient(90deg,var(--zhu),var(--gold));border-radius:999px;transition:width .5s}
+
+/* 星级 */
+.g-stars{color:var(--gold);font-size:16px;letter-spacing:2px;margin-left:6px;vertical-align:middle}
+.g-stars i{font-style:normal;color:var(--line-2)}
+.g-done-rank{display:flex;align-items:center;justify-content:center;gap:10px;margin:4px 0 14px;flex-wrap:wrap}
+.g-broke{color:var(--zhu);font-size:12.5px;border:1px dashed var(--zhu-2);border-radius:999px;padding:2px 10px}
+.g-done-time{display:block;font-size:12px;color:var(--ink-4);margin-top:4px;font-family:var(--sans);letter-spacing:.02em}
+.g-done-btns{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:10px}
+.g-hint-btn{margin-bottom:8px}
+.g-fill-chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+
+/* 每日挑战 */
+.g-daily{display:flex;align-items:center;gap:12px;background:linear-gradient(120deg,var(--card),var(--paper));border:1px solid var(--line);border-left:4px solid var(--zhu);border-radius:var(--r);padding:12px 16px;margin:10px 0;box-shadow:var(--shadow-sm);text-decoration:none;transition:.15s}
+.g-daily:hover{transform:translateY(-2px);box-shadow:var(--shadow)}
+.g-daily b{font-family:var(--serif);font-size:15.5px;letter-spacing:.08em;color:var(--zhu);white-space:nowrap}
+.g-daily span{font-size:13px;color:var(--ink-2);flex:1}
+.g-daily-new{color:var(--zhu)!important;font-weight:600}
+.g-daily-check{color:var(--teal,#2f6f5e)!important;letter-spacing:.1em}
+.g-daily em{font-style:normal;font-size:12.5px;color:var(--ink-4);white-space:nowrap}
+.g-daily.done{opacity:.88}
+.g-daily.done b{color:var(--teal,#2f6f5e)}
+
+/* ── 讲解闭环 ── */
+.g-feedback{margin:8px 0 2px}
+.g-explain{background:var(--paper);border:1px solid var(--line-2);border-left:3px solid var(--gold);border-radius:10px;padding:10px 14px;margin-top:4px;animation:gIn .35s ease}
+.g-explain.wrong{border-left-color:var(--zhu)}
+.g-ex-kind{display:inline-block;font-size:10.5px;color:var(--ink-4);border:1px solid var(--line-2);border-radius:999px;padding:0 8px;line-height:1.7;margin-bottom:4px}
+.g-ex-n{font-size:13.5px;color:var(--ink);line-height:1.75;margin:2px 0 4px;font-family:var(--serif)}
+.g-ex-x{font-size:13px;color:var(--ink-3);line-height:1.7;margin:2px 0 4px}
+.g-ex-src{font-size:12px;color:var(--ink-4);margin:4px 0 0}
+.g-ex-links{margin:6px 0 0}
+.g-ex-links .g-wlink{margin-left:0;margin-right:10px}
+.g-sc-desc{font-size:12.8px;color:var(--ink-3);line-height:1.7;margin:6px 0 2px;padding:8px 12px;background:var(--card);border-radius:8px;border:1px dashed var(--line-2)}
+.g-sc-more{font-size:12.8px;color:var(--ink-3);line-height:1.8;margin:6px 0 0}
+.g-sc-more b{font-family:var(--serif);font-weight:400;color:var(--zhu)}
+
+.g-fh-time em[data-t].low{color:var(--zhu);font-weight:700;animation:gShake .5s}
+
+/* ── 错题本 ── */
+.g-mistakes{margin:18px 0 8px}
+.g-mist-title{font-family:var(--serif);font-size:16px;letter-spacing:.06em;margin:0 0 8px;color:var(--ink)}
+.g-mist-title span{font-size:12px;color:var(--ink-4);font-family:var(--sans);letter-spacing:0;font-weight:400}
+.g-mist-list{list-style:none;margin:0;padding:0}
+.g-mist-list li{padding:10px 14px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px;background:var(--card)}
+.g-mist-t{font-family:var(--serif);font-size:14px;line-height:1.7;color:var(--ink);margin:0 0 3px}
+.g-mist-src{font-size:11.5px;color:var(--ink-4);font-family:var(--sans);margin-left:6px}
+.g-mist-n{font-size:12.5px;color:var(--ink-3);line-height:1.65;margin:0}
+.g-mist-clear{margin:4px 0 0}
+.g-btn.sm{padding:5px 14px;font-size:12.5px}
+
+/* ── 诗谜（汉兜式猜句）── */
+.g-navy{--g-c:#3d5a80}
+.g-chip.sm{padding:3px 10px;font-size:12px;font-family:var(--sans)}
+.g-chip.sm.on{background:var(--zhu);border-color:var(--zhu);color:#fff}
+.g-guess-modes{display:flex;gap:6px;justify-content:center;margin:0 0 8px;flex-wrap:wrap}
+.g-guess-tip{text-align:center;font-size:13px;color:var(--ink-3);line-height:1.8;margin:2px 0 8px}
+.g-guess-hint{font-size:11.8px;color:var(--ink-4)}
+.g-rhyme{display:inline-block;color:var(--gold);border:1px dashed var(--gold);border-radius:999px;padding:0 10px;font-size:12px;margin-left:6px}
+.g-guess-board{display:flex;flex-direction:column;gap:4px;align-items:center;margin:6px 0}
+.g-guess-row{display:flex;gap:4px;justify-content:center;animation:gIn .3s ease}
+.g-guess-cell{width:38px;border-radius:8px;text-align:center;padding:4px 0 2px;border:1px solid var(--line);background:var(--card);transition:.2s}
+.g-guess-cell b{display:block;font-family:var(--serif);font-size:18px;line-height:1.5;color:var(--ink)}
+.g-guess-cell .g-py{display:flex;justify-content:center;gap:1px;font-style:normal;font-size:8.5px;color:var(--ink-4);min-height:12px;line-height:1}
+.g-py-seg{padding:0 1px}
+.g-py-seg.on{color:var(--zhu);font-weight:700}
+.g-tone{font-style:normal;color:var(--ink-4)}
+.g-tone.on{color:var(--gold);font-weight:700}
+.g-guess-cell.green,.g-guess-row.ans .g-guess-cell{background:var(--teal,#2f6f5e);border-color:var(--teal,#2f6f5e)}
+.g-guess-cell.green b,.g-guess-row.ans b{color:#fff}
+.g-guess-cell.green .g-py-seg,.g-guess-cell.green .g-tone{color:rgba(255,255,255,.75)}
+.g-guess-cell.yellow{background:var(--gold);border-color:var(--gold)}
+.g-guess-cell.yellow b{color:#fff}
+.g-guess-cell.yellow .g-py-seg,.g-guess-cell.yellow .g-tone{color:rgba(255,255,255,.75)}
+.g-guess-cell.grey{opacity:.8}
+.g-guess-cell.grey b{color:var(--ink-3)}
+.g-guess-form{display:flex;gap:8px;justify-content:center;max-width:420px;margin:0 auto}
+.g-guess-input{flex:1;min-width:0;padding:9px 13px;border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--ink);font-size:16px;font-family:var(--serif);letter-spacing:.2em;text-align:center}
+.g-guess-input:focus{outline:none;border-color:var(--zhu-2)}
+.g-guess-status{text-align:center;font-size:12.8px;color:var(--ink-3);min-height:18px;margin:4px 0 0}
+.g-ans{color:var(--zhu);font-size:20px;letter-spacing:.1em}
+.g-ans-src{font-size:12.5px;color:var(--ink-4)}
+
+/* ── 飞花令 · 对句 ── */
+.g-fh-q{font-family:var(--serif);font-size:19px;line-height:2;letter-spacing:.06em;color:var(--ink);text-align:center;margin:4px 0}
+.g-fh-blank{display:inline-block;color:var(--zhu);border-bottom:2px dashed var(--zhu-2);margin-left:6px;font-size:15px;letter-spacing:.08em}
+.g-fh-bar{display:block;height:4px;border-radius:999px;background:var(--line-2);overflow:hidden;margin:8px 0 2px;max-width:520px;margin-left:auto;margin-right:auto}
+.g-fh-bar i{display:block;height:100%;background:linear-gradient(90deg,var(--teal,#2f6f5e),var(--gold));transition:width 1s linear;border-radius:999px}
+.g-fh-time em[data-t].low{color:var(--zhu);font-weight:700;animation:gShake .5s}
+.g-rv-line{font-family:var(--serif);font-size:14.5px;line-height:1.9;color:var(--ink);margin:0}
+.g-rv-line span{font-size:11.5px;color:var(--ink-4);font-family:var(--sans);margin-left:6px}
+
+/* ── 本局回顾 ── */
+.g-review{max-height:46vh;overflow-y:auto;text-align:left;margin:10px auto 4px;max-width:560px}
+.g-review h4{font-family:var(--serif);font-size:15px;letter-spacing:.06em;margin:0 0 8px;color:var(--ink)}
+.g-review h4 span{font-size:12px;color:var(--ink-4);font-family:var(--sans);letter-spacing:0;font-weight:400}
+.g-rv-item{display:flex;gap:8px;align-items:flex-start;padding:7px 10px;border-bottom:1px dashed var(--line-2)}
+.g-rv-item:last-child{border-bottom:0}
+.g-rv-item i{flex:none;font-style:normal;color:var(--teal,#2f6f5e);font-weight:700;font-size:13px;line-height:1.8}
+.g-rv-item.miss i{color:var(--zhu)}
+.g-rv-t{font-family:var(--serif);font-size:13.5px;line-height:1.7;color:var(--ink);margin:0}
+.g-rv-t span{font-size:11px;color:var(--ink-4);font-family:var(--sans);margin-left:6px}
+.g-rv-n{font-size:12px;color:var(--ink-3);line-height:1.6;margin:2px 0 0}
+
+/* ── 连词成句 ── */
+.g-lj-slots{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:12px 0 4px}
+.g-lj-slot{min-width:3.2em;height:40px;border:1.5px dashed var(--line-2);border-radius:10px;display:inline-flex;align-items:center;justify-content:center;font-family:var(--serif);font-size:16px;color:var(--ink);transition:.2s}
+.g-lj-slot.on{border-style:solid;border-color:var(--teal,#2f6f5e);background:var(--card);animation:gIn .3s ease}
+.g-lj-pool{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:560px;margin:8px auto 0}
+.g-lj-block{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 15px;font-family:var(--serif);font-size:15.5px;letter-spacing:.06em;color:var(--ink-2);cursor:pointer;transition:.15s}
+.g-lj-block:hover:not(.used){border-color:var(--zhu-2);color:var(--zhu);transform:translateY(-2px)}
+.g-lj-block.used{opacity:.35;pointer-events:none;text-decoration:line-through}
+.g-lj-block.intr{border-color:var(--gold);color:var(--gold);font-style:italic;opacity:.9;pointer-events:none}
+.g-lj-prog{color:var(--ink-4);font-size:12.5px;margin-left:8px}

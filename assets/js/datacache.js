@@ -3,7 +3,7 @@
 // 数据一律不进 localStorage —— localStorage 里只放「已载分片号清单」这类元信息。
 import { dbGet, dbPut, dbClear } from './db.js';
 import { fetchBytes, fetchText, pickCompress } from './hashsearch.js';
-import { sha256hex } from './codec.js';
+import { sha256hex, decodeMsgpack, ensureMsgpackGlobal, decompress } from './codec.js';
 import { baseHref } from './util.js';
 
 const LOADED_KEY = 'ciju.loaded';
@@ -13,6 +13,8 @@ let _manifest = null;
 const _mem = { index: null, pinyin: null, suggest: null, shards: new Map() };
 const _loaded = new Set();   // 已载分片下标（回访差量 + 进度显示）
 const _inflight = new Map(); // 在途请求去重：避免「今日板块」与「后台预载」并发时重复下载同一分片/索引
+// 主线程解码缓存：今日板块 / 游戏讲解按 gid 取记录时，整片只解压解码一次（datacache 只缓存压缩字节）
+const _decoded = new Map();  // shardIndex -> { pieces }（msgpack 解码结果）
 function dedupe(key, fn) {
   if (_inflight.has(key)) return _inflight.get(key);
   const p = fn().finally(() => { _inflight.delete(key); });
@@ -121,4 +123,18 @@ export async function getShard(i, opts) {
     try { localStorage.setItem(LOADED_KEY, JSON.stringify([..._loaded])); } catch {}
     return part;
   });
+}
+
+// 按分片下标取「解码后的记录数组」：与 getShard 共享同一份下载，整片只解压/解码一次，
+// 今日板块与游戏讲解（recordFor）共用，避免主线程重复整片解码（性能优化）。
+export async function getShardRecords(i) {
+  if (_decoded.has(i)) return _decoded.get(i);
+  await ensureMsgpackGlobal();
+  const part = await getShard(i);
+  const dec = await decompress(part.buf, part.ext);
+  const pack = await decodeMsgpack(dec);
+  const rec = pack.pieces || pack;
+  if (_decoded.size > 8) _decoded.clear();  // 内存上限：最多缓存 8 片解码对象
+  _decoded.set(i, rec);
+  return rec;
 }

@@ -17,7 +17,7 @@ let activeBtn = null;
 function reset(b) {
   if (!b) return;
   b.classList.remove('on');
-  b.textContent = '朗读';
+  b.textContent = b.dataset.label || '朗读';   // 恢复原始文案（朗读中的按钮文字由调用方自定义）
   b.setAttribute('aria-pressed', 'false');
   if (activeBtn === b) activeBtn = null;
 }
@@ -27,6 +27,7 @@ function stopAll() {
 }
 function speak(btn, txt) {
   if (!SYN || !('SpeechSynthesisUtterance' in window)) { miniToast('当前浏览器不支持语音朗读'); return; }
+  if (!btn.dataset.label) btn.dataset.label = btn.textContent;
   stopAll();
   const u = new SpeechSynthesisUtterance(txt);
   u.lang = 'zh-CN'; u.rate = 0.9;
@@ -82,4 +83,13 @@ export function mountTTS(root = document) {
   }
   // 离开页面时停掉朗读，免得后台一直在说
   window.addEventListener('pagehide', stopAll);
+}
+
+// ── 公共朗读入口（原文详情页等复用）────────────────────
+// 按钮状态自动切换：未读 → 朗读（on）；朗读中 → 停止
+export function speakText(btn, txt) {
+  if (!btn || !txt) return false;
+  if (btn.classList.contains('on')) { stopAll(); return false; }
+  speak(btn, txt);
+  return true;
 }

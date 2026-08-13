@@ -25,7 +25,8 @@ export function toSearchString(st) {
 
 // 输入过程用 replaceState（不制造几十条历史），确定性动作（点联想/点筛选）用 pushState
 export function writeState(st, { replace = true } = {}) {
-  const url = location.pathname + (toSearchString(st).startsWith('?') ? toSearchString(st) : '');
+  const qs = toSearchString(st);
+  const url = qs.startsWith('?') ? location.pathname + qs : qs;
   try {
     if (replace) history.replaceState({ st }, '', url);
     else history.pushState({ st }, '', url);

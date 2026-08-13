@@ -12,6 +12,21 @@ export function mountNav() {
     if (nav) nav.classList.toggle('open');
   });
 
+  // 底部导航（移动端 tabbar）当前 tab 高亮：按路径匹配 data-tb
+  const TB = {
+    home: /^\/?(index\.html)?$/,
+    scenes: /^\/scenes\//,
+    games: /^\/games\//,
+    moods: /^\/moods\//,
+    places: /^\/places\//,
+    authors: /^\/authors\//,
+  };
+  const p = location.pathname;
+  document.querySelectorAll('.tabbar .tb').forEach(a => {
+    const k = a.getAttribute('data-tb');
+    if (k && TB[k] && TB[k].test(p)) a.classList.add('active');
+  });
+
   // 处境词点一下填进搜索框
   document.addEventListener('click', e => {
     const fill = e.target.closest('[data-fill]');

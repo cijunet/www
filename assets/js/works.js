@@ -10,6 +10,7 @@ import { fetchJSON } from './hashsearch.js';
 import { baseHref, esc } from './util.js';
 import { initRecords, getCards } from './records.js';
 import { loadMeta } from './meta.js';
+import { speakText } from './tts.js';
 
 let _promise = null;
 let _items = null;
@@ -195,6 +196,12 @@ export function mountWorksDetail(root = document) {
       }
       droot.hidden = false;
       droot.innerHTML = await detailHTML(work, R);
+      // 朗读全文：speakText 自动处理 播放/停止 状态切换与文案恢复
+      const speakBtn = droot.querySelector('[data-work-speak]');
+      if (speakBtn) {
+        const fullText = (droot.querySelector('.q-work-text') || { textContent: '' }).textContent;
+        speakBtn.addEventListener('click', () => speakText(speakBtn, fullText));
+      }
       droot.scrollIntoView();
       document.title = `${work.n} · ${work.a || '佚名'} - 原文库 - 词句`;
     } catch (e) {
@@ -277,8 +284,11 @@ async function detailHTML(work, R) {
     <p class="wd-meta">${srcLine}<span class="w-mode-badge">${esc(modeLabel)}</span></p>
   </div></section>
   <div class="wrap">
-    <section class="wd-body"><div class="q-work-text">${esc(body)}${tail ? `<i class="q-work-tail">${esc(tail)}</i>` : ''}</div>
-      <div class="q-work-src">${srcLine}${srcNote}${isCtx ? ' · 版权保护期内，仅摘引短句并标注出处' : ''}</div>
+    <section class="wd-body">
+      <div class="q-work-text">${esc(body)}${tail ? `<i class="q-work-tail">${esc(tail)}</i>` : ''}</div>
+      <div class="q-work-src"><span class="wd-src-txt">${srcLine}${srcNote}${isCtx ? ' · 版权保护期内，仅摘引短句并标注出处' : ''}</span>
+        <button type="button" class="wd-speak" data-work-speak aria-pressed="false" title="朗读全文">🔊 朗读全文</button>
+      </div>
     </section>
     ${authorCard}
     <section class="wd-pieces">

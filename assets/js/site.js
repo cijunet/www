@@ -12,7 +12,8 @@ import { mountRelated } from './related.js';
 import { mountSearchDelegate, isV2 } from './search-delegate.js';
 import { mountDetail } from './detail.js';
 import { mountPerf } from './perf.js';
-import { mountWorks, mountWorksIndex, mountWorksDetail, ensureWorks, ensureWorksMeta } from './works.js';
+import { mountWorks, mountWorksIndex, mountWorksDetail, ensureWorksMeta } from './works.js';
+import { mountGamesIndex, mountGame } from './games.js';
 import { getManifest, getShard, getIndex, getSuggest } from './datacache.js';
 
 // 首页后台预载：只下载主分片（今日板块取句 + 搜索记录共用同一份，datacache 去重只下一遍）。
@@ -70,6 +71,10 @@ function boot() {
   mountWorks();
   mountWorksIndex();
   mountWorksDetail();
+
+  // 诗趣游戏：栏目页玩法卡片 + 玩法页路由
+  mountGamesIndex();
+  mountGame();
 
   // 后台预载全量数据（今日取句 + 搜索就绪），不阻塞首屏渲染
   prefetchAll();

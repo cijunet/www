@@ -6,8 +6,7 @@ import { renderCard, setMeta } from './card.js';
 import { loadMeta } from './meta.js';
 import { baseHref, esc as _esc } from './util.js';
 import { fetchJSON } from './hashsearch.js';
-import { decompress, decodeMsgpack } from './codec.js';
-import { getManifest, getShard } from './datacache.js';
+import { getManifest, getShardRecords } from './datacache.js';
 
 const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
 const CHIP_CAL = [
@@ -45,26 +44,11 @@ function mmdd(now) {
 }
 function shortName(name) { return name.split(/[、·，]/)[0]; }
 
-// 主线程首次 msgpack 解码前注入解码器（经典脚本，与 search-worker importScripts 同一个文件；幂等）
-let _mpReady = null;
-function ensureMsgpackGlobal() {
-  if (globalThis.msgpack) return Promise.resolve();
-  if (_mpReady) return _mpReady;
-  _mpReady = new Promise((res, rej) => {
-    const s = document.createElement('script');
-    s.src = baseHref() + 'assets/msgpack.min.js';
-    s.onload = () => res();
-    s.onerror = () => { _mpReady = null; rej(new Error('msgpack 加载失败')); };
-    document.head.appendChild(s);
-  });
-  return _mpReady;
-}
-
 // 今日记录改从「主分片」按 gid 取句（单一数据源，不再有独立重复包）：
 // gid 在 D.pieces 中的位置即全局整数下标，分片边界 = floor(gid / shardSize)，
-// 经 datacache 取压缩字节（IDB 缓存 + 版本校验，且与搜索 Worker 共享同一份下载），主线程解码。
+// 经 datacache 取压缩字节（IDB 缓存 + 版本校验，且与搜索 Worker 共享同一份下载），主线程解码
+// （getShardRecords 内部有整片解码缓存，多模块共用只解一次）。
 async function loadTodayRecords(gids) {
-  await ensureMsgpackGlobal();
   const m = await getManifest();
   const shardSize = m.shardSize || 1900;
   const byShard = new Map();
@@ -76,12 +60,9 @@ async function loadTodayRecords(gids) {
   }
   const out = new Map();
   await Promise.all([...byShard.entries()].map(async ([si, gs]) => {
-    let part;
-    try { part = await getShard(si); }
+    let pieces;
+    try { pieces = await getShardRecords(si); }
     catch (e) { console.error('[today] 分片加载失败', si, e); return; }
-    const dec = await decompress(part.buf, part.ext);
-    const pack = await decodeMsgpack(dec);
-    const pieces = pack.pieces || pack;
     for (const g of gs) {
       const rec = pieces[g % shardSize];
       if (rec) { rec._gid = g; out.set(g, rec); }

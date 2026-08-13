@@ -1,5 +1,6 @@
 // 解压 + 哈希工具（浏览器 / Node 共用，架构 3.4 下载后按校验值校验）。
 // 数据文件为 gzip 压缩的 msgpack；传输层用内容哈希命名，拉取后先校验再使用。
+import { baseHref } from './util.js';
 
 // 浏览器与 Node 都有 DecompressionStream（Node18+）
 export async function decompress(buf, ext) {
@@ -13,6 +14,22 @@ export async function decompress(buf, ext) {
 export async function sha256hex(buf) {
   const digest = await crypto.subtle.digest('SHA-256', buf);
   return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 12);
+}
+
+// 主线程首次 msgpack 解码前注入解码器（assets/msgpack.min.js 经典脚本；幂等）。
+// 与 search-worker 的 importScripts 注入同一个文件；今日板块 / 游戏讲解共用。
+let _mpReady = null;
+export function ensureMsgpackGlobal() {
+  if (globalThis.msgpack) return Promise.resolve();
+  if (_mpReady) return _mpReady;
+  _mpReady = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = baseHref() + 'assets/msgpack.min.js';
+    s.onload = () => res();
+    s.onerror = () => { _mpReady = null; rej(new Error('msgpack 加载失败')); };
+    document.head.appendChild(s);
+  });
+  return _mpReady;
 }
 
 // msgpack 解码：浏览器用全局 msgpack（assets/msgpack.min.js 经典脚本注入），
