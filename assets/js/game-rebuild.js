@@ -54,7 +54,12 @@ export function render(root, data, R) {
           ui.src.innerHTML = `<span class="g-lives">生命 ×${lives}</span> <span class="g-score-cur2">${cur} 分</span> ✓ 拼成！`;
           sfx.win();
           burst(ui.stage, 'gold');
-          setTimeout(() => { idx++; load(); }, 1500);
+          // 答案已展示，等用户点「下一题」再切换
+          const nx = document.createElement('button');
+          nx.type = 'button'; nx.className = 'g-btn g-next'; nx.textContent = '下一题 →';
+          nx.onclick = () => { idx++; load(); };
+          ui.opts.innerHTML = '';
+          ui.opts.appendChild(nx);
         }
       } else {
         lives--; fails++; perfect = false;
@@ -66,7 +71,12 @@ export function render(root, data, R) {
           items.push({ t: q.lines.join('，'), a: q.au, w: q.w, ok: false });  // 命尽跳过也进回顾
           cards.forEach(c => c.disabled = true);
           ui.src.innerHTML = `<span class="g-lives bad">生命耗尽</span> 正确顺序：${correct.map(esc).join('｜')}`;
-          setTimeout(() => { idx++; lives = 3; load(); }, 2200);
+          // 答案已展示，等用户点「下一题」（生命恢复 3 条）
+          const nx2 = document.createElement('button');
+          nx2.type = 'button'; nx2.className = 'g-btn g-next'; nx2.textContent = '下一题 →';
+          nx2.onclick = () => { idx++; lives = 3; load(); };
+          ui.opts.innerHTML = '';
+          ui.opts.appendChild(nx2);
         } else {
           ui.src.innerHTML = `<span class="g-lives">生命 ×${lives}</span> <span class="g-score-cur2">${cur} 分</span>`;
         }

@@ -79,19 +79,28 @@ export async function render(root, data, R) {
     if (kind === 'fill') {
       const a2 = q.a.split('');
       if (blanks) { blanks[0].textContent = a2[0]; blanks[1].textContent = a2[1]; blanks[0].classList.add('right'); blanks[1].classList.add('right'); }
-      ui.src.innerHTML = (ok ? '✓' : '✗ 答案是「' + esc(q.a) + '」') + ` ${esc(q.au || '佚名')}《${esc(q.w)}》`;
+      // 答案显示在讲解上方（答对=完整句，答错=正确答案）
+      ui.fb.innerHTML = `<p class="g-ans">${ok ? '✓ 「' + esc(q.q).replace('__', esc(q.a)) + '」' : '✗ 答案是「' + esc(q.a) + '」'}</p><p class="g-ans-src">— ${esc(q.au || '佚名')}《${esc(q.w)}》</p>`;
+      ui.src.textContent = '';
     } else {
       const sid = q.opts[q.ans]; const sc = scenes[sid];
       ui.opts.querySelectorAll('.g-chip')[q.ans].classList.add('right');
       if (!ok && optIdx != null) ui.opts.querySelectorAll('.g-chip')[optIdx].classList.add('shake');
-      ui.src.textContent = (ok ? '✓' : '✗') + ` 答案是「${sc ? sc.name : sid}」${q.au ? ' · ' + q.au : ''}${q.w ? '《' + q.w + '》' : ''}`;
+      // 答案显示在讲解上方
+      ui.fb.innerHTML = `<p class="g-ans">${ok ? '✓' : '✗'} 答案是「${sc ? sc.name : sid}」</p>${q.au || q.w ? `<p class="g-ans-src">${q.au ? esc(q.au) : ''}${q.w ? '《' + esc(q.w) + '》' : ''}</p>` : ''}`;
+      ui.src.textContent = '';
     }
     const rec = await recordFor(q.gid);
     if (rec) {
-      ui.fb.innerHTML = explainBox(rec, R, { wrong: !ok });
+      ui.fb.innerHTML += explainBox(rec, R, { wrong: !ok });
       if (!ok) recordMistake(rec, 'daily');
     }
-    setTimeout(() => { idx++; load(); }, ok ? 1500 : 2200);
+    // 答案已展示，等用户点「下一题」再切换
+    const nx = document.createElement('button');
+    nx.type = 'button'; nx.className = 'g-btn g-next'; nx.textContent = '下一题 →';
+    nx.onclick = () => { idx++; load(); };
+    ui.opts.innerHTML = '';
+    ui.opts.appendChild(nx);
   }
 
   function done() {

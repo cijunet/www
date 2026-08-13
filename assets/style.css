@@ -573,6 +573,11 @@ mark{background:linear-gradient(transparent 58%,rgba(158,58,46,.24) 0);color:inh
      不搞「复制满宽首行」的特异布局，保证各宽度表现一致 */
   .q-act{display:flex;gap:6px}
   .q-act .btn-copy{flex:1;min-width:0;padding:8px 4px;font-size:12.3px;min-height:36px;display:flex;align-items:center;justify-content:center;border-radius:999px;white-space:nowrap}
+  /* 飞花令输入：手机端输入框独占一行（全宽），按钮换到下一行 */
+  .g-fh-form{flex-wrap:wrap}
+  .g-fh-form .g-input{flex-basis:100%;width:100%}
+  .g-fh-form .g-btn{flex:1;min-width:0}
+  .g-fh-form .g-btn.ghost.sm{flex:0 0 auto}
 }
 /* 极端小屏：场景卡维持 2 列（描述截断 2 行），手机内容密度优先 */
 @media (max-width:400px){
@@ -777,9 +782,12 @@ mark{background:linear-gradient(transparent 58%,rgba(158,58,46,.24) 0);color:inh
 .g-fh-rule{font-size:12.8px;color:var(--ink-3);text-align:center;line-height:1.7;margin:4px 0 8px}
 .g-fh-time{text-align:center;font-size:13.5px;color:var(--ink-2)}
 .g-fh-time em{font-style:normal;color:var(--zhu);font-family:var(--serif);font-size:16px}
-.g-fh-form{display:flex;gap:8px;width:100%;max-width:520px;margin:0 auto}
+.g-fh-form{display:flex;gap:8px;width:100%;max-width:660px;margin:0 auto}
 .g-input{flex:1;min-width:0;padding:9px 13px;border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--ink);font-size:14.5px;font-family:var(--serif)}
 .g-input:focus{outline:none;border-color:var(--zhu-2)}
+.g-fh-hints{display:flex;justify-content:center;margin:8px 0 0}
+.g-fh-hints .g-btn{min-width:0}
+.g-next{display:block;margin:12px auto 0;min-width:150px}
 
 /* 拼句 */
 .g-rb-title{font-family:var(--serif);font-size:15.5px;text-align:center;color:var(--ink-2);margin:0 0 2px}

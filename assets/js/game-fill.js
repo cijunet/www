@@ -86,12 +86,9 @@ export async function render(root, data, R) {
       sfx.combo(combo);
       burst(ui.stage, 'gold');
       blanks[0].classList.add('right'); blanks[1].classList.add('right');
-      ui.src.innerHTML = `✓ 「${esc(q.q)}」— ${esc(q.au || '佚名')}《${esc(q.w)}》`;
-      const link = document.createElement('a');
-      link.className = 'g-wlink';
-      link.href = R + 'works/?w=' + encodeURIComponent(q.w);
-      link.textContent = '查看原文 ↗';
-      ui.src.appendChild(link);
+      // 答案显示在讲解上方
+      ui.fb.innerHTML = `<p class="g-ans">✓ 「${esc(q.q)}」</p><p class="g-ans-src">— ${esc(q.au || '佚名')}《${esc(q.w)}》<a class="g-wlink" href="${R}works/?w=${encodeURIComponent(q.w)}">查看原文 ↗</a></p>`;
+      ui.src.textContent = '';
     } else {
       combo = 0; errs++;
       score.set(cur, 0);
@@ -102,18 +99,24 @@ export async function render(root, data, R) {
       const a2 = q.a.split('');
       blanks[0].textContent = a2[0]; blanks[0].classList.add('right');
       blanks[1].textContent = a2[1]; blanks[1].classList.add('right');
-      ui.src.textContent = `✗ 答案是「${esc(q.a)}」${q.w ? '— ' + esc(q.au || '佚名') + '《' + esc(q.w) + '》' : ''}`;
+      ui.fb.innerHTML = `<p class="g-ans">✗ 答案是「${esc(q.a)}」</p>${q.w ? `<p class="g-ans-src">— ${esc(q.au || '佚名')}《${esc(q.w)}》</p>` : ''}`;
+      ui.src.textContent = '';
     }
-    // 讲解闭环：怎么用/白话/出处（按 gid 取记录）
+    // 讲解闭环：怎么用/白话/出处（按 gid 取记录），追加到答案下方
     const rec = await recordFor(q.gid);
     if (rec) {
-      ui.fb.innerHTML = explainBox(rec, R, { wrong: !okAns });
+      ui.fb.innerHTML += explainBox(rec, R, { wrong: !okAns });
       if (!okAns) recordMistake(rec, 'fill');
     } else if (q.n) {
-      ui.fb.innerHTML = explainBox({ n: q.n, a: q.au, w: q.w, d: q.d }, R);
+      ui.fb.innerHTML += explainBox({ n: q.n, a: q.au, w: q.w, d: q.d }, R);
       if (!okAns) recordMistake({ t: q.q.replace(/__/g, q.a), a: q.au, w: q.w, n: q.n, x: '' }, 'fill');
     }
-    setTimeout(() => { idx++; load(); }, okAns ? 1900 : 2600);
+    // 答案已展示，等用户点「下一题」再切换
+    const nx = document.createElement('button');
+    nx.type = 'button'; nx.className = 'g-btn g-next'; nx.textContent = '下一题 →';
+    nx.onclick = () => { idx++; load(); };
+    ui.opts.innerHTML = '';
+    ui.opts.appendChild(nx);
   }
 
   function done() {

@@ -1,11 +1,11 @@
 // assets/js/game-feihua.js — 玩法：飞花令 · 对句（提示半句，补全另一半）
 // 规则：系统出关键字 + 一句含字的诗，只提示前半句或后半句，你自由输入补全另一半。
-// 每回合 45 秒（时间长，充分思考）；3 条命（超时/跳过扣命）；补对显示完整句与讲解。
+// 每回合 180 秒（充分思考）；3 条命（超时/跳过扣命）；补对显示完整句与讲解。
 import { esc, norm } from './util.js';
 import { sfx, burst, shuffle, wrap, settleGame, starHTML, rankBadge, recordFor, explainBox, recordMistake, fmtElapsed, moreLink } from './game-common.js';
 
 const ROUNDS = 12;
-const TIME = 45;
+const TIME = 180;
 
 export function render(root, data, R) {
   const ui = wrap(root, '飞花令 · 对句');
@@ -16,7 +16,7 @@ export function render(root, data, R) {
     ui.stage.innerHTML = `
       <p class="g-fh-tip">这一轮的关键字</p>
       <div class="g-fh-char">${esc(ch)}</div>
-      <p class="g-fh-rule">共 ${ROUNDS} 句含「${esc(ch)}」的诗句，每句提示一半，你补全另一半。每句 <b>45 秒</b>，3 条命。</p>
+      <p class="g-fh-rule">共 ${ROUNDS} 句含「${esc(ch)}」的诗句，每句提示一半，你补全另一半。每句 <b>${TIME} 秒</b>，3 条命。</p>
       <p class="g-fh-time" data-stat>生命 <em data-lives>${lives}</em> · 已对 <em data-c>${correct}</em> 句</p>`;
   }
 
@@ -56,11 +56,10 @@ export function render(root, data, R) {
       <p class="g-fh-time" data-stat>剩余 <em data-t>${TIME}</em> 秒 · 生命 <em data-lives>${lives}</em> · 已对 <em data-c>${correct}</em></p>
       <span class="g-fh-bar"><i data-bar style="width:100%"></i></span>`;
     ui.opts.innerHTML = `<form class="g-fh-form" autocomplete="off">
-      <input type="text" class="g-input" maxlength="24" placeholder="输入${askWord}（${targetLen}字），回车确认" aria-label="输入诗句">
-      <button type="submit" class="g-btn">补全</button>
-      <button type="button" class="g-btn ghost" data-skip>放弃本题</button>
-      ${hints > 0 ? `<button type="button" class="g-btn ghost sm" data-hint>💡 提示（剩 ${hints} 次）</button>` : ''}
-    </form>`;
+      <input type="text" class="g-input" maxlength="24" placeholder="输入${askWord}（${targetLen}字），回车提交" aria-label="输入诗句">
+      <button type="submit" class="g-btn">提交</button>
+      <button type="button" class="g-btn ghost" data-skip>放弃</button>
+    </form>${hints > 0 ? `<p class="g-fh-hints"><button type="button" class="g-btn ghost sm" data-hint>💡 提示（剩 ${hints} 次）</button></p>` : ''}`;
     const input = ui.opts.querySelector('.g-input');
     input.addEventListener('compositionstart', () => { composing = true; });
     input.addEventListener('compositionend', () => { composing = false; });
@@ -98,12 +97,19 @@ export function render(root, data, R) {
         sfx.right();
         burst(ui.stage, 'gold');
         clearTimer();
-        ui.src.innerHTML = `✓ ${esc(q.up)}，${esc(q.down)}。 — ${esc(q.au || '佚名')}《${esc(q.w)}》<a class="g-wlink" href="${R}works/?w=${encodeURIComponent(q.w)}">查看原文 ↗</a>`;
+        // 答案显示在讲解上方（.g-ans 醒目），讲解追加到答案下面
+        ui.fb.innerHTML = `<p class="g-ans">✓ ${esc(q.up)}，${esc(q.down)}。</p><p class="g-ans-src">— ${esc(q.au || '佚名')}《${esc(q.w)}》<a class="g-wlink" href="${R}works/?w=${encodeURIComponent(q.w)}">查看原文 ↗</a></p>`;
+        ui.src.textContent = '';
         (async () => {
           const rec = await recordFor(q.gid);
-          if (rec) ui.fb.innerHTML = explainBox(rec, R);
+          if (rec) ui.fb.innerHTML += explainBox(rec, R);
         })();
-        setTimeout(() => { idx++; next(); }, 2200);
+        // 答案已展示，等用户点「下一题」再切换
+        const nx = document.createElement('button');
+        nx.type = 'button'; nx.className = 'g-btn g-next'; nx.textContent = '下一题 →';
+        nx.onclick = () => { idx++; next(); };
+        ui.opts.innerHTML = '';
+        ui.opts.appendChild(nx);
       } else {
         sfx.wrong();
         input.classList.add('shake');
@@ -136,13 +142,22 @@ export function render(root, data, R) {
     const q = order[idx];
     lives--;
     sfx.wrong();
-    ui.src.innerHTML = `${reason}。这句是：${esc(q.up)}，${esc(q.down)}。 — ${esc(q.au || '佚名')}《${esc(q.w)}》`;
+    // 答案显示在讲解上方
+    ui.fb.innerHTML = `<p class="g-ans">${reason}，这句是：${esc(q.up)}，${esc(q.down)}。</p><p class="g-ans-src">— ${esc(q.au || '佚名')}《${esc(q.w)}》</p>`;
+    ui.src.textContent = '';
     (async () => {
       const rec = await recordFor(q.gid);
-      if (rec) { ui.fb.innerHTML = explainBox(rec, R, { wrong: true }); recordMistake(rec, 'feihua'); }
+      if (rec) { ui.fb.innerHTML += explainBox(rec, R, { wrong: true }); recordMistake(rec, 'feihua'); }
     })();
     if (lives <= 0) { setTimeout(() => done(), 2200); }
-    else { setTimeout(() => { idx++; next(); }, 2500); }
+    else {
+      // 答案已展示，等用户点「下一题」再切换
+      const nx = document.createElement('button');
+      nx.type = 'button'; nx.className = 'g-btn g-next'; nx.textContent = '下一题 →';
+      nx.onclick = () => { idx++; next(); };
+      ui.opts.innerHTML = '';
+      ui.opts.appendChild(nx);
+    }
   }
 
   function done() {

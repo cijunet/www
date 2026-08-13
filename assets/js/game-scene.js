@@ -39,14 +39,9 @@ export async function render(root, data, R) {
       sfx.combo(combo);
       burst(btn, 'gold');
       btn.classList.add('right');
-      const line = [`✓ 最适合「${sc ? sc.name : sid}」`, q.au ? ' — ' + q.au : '', q.w ? '《' + q.w + '》' : ''].filter(Boolean).join('');
-      const link = document.createElement('a');
-      link.className = 'g-wlink';
-      link.href = R + 'scenes/?id=' + sid;
-      link.textContent = '看这个场景 ↗';
-      ui.src.innerHTML = '';
-      ui.src.append(document.createTextNode(line + ' '));
-      ui.src.appendChild(link);
+      // 答案显示在讲解上方
+      ui.fb.innerHTML = `<p class="g-ans">✓ 最适合「${sc ? sc.name : sid}」</p><p class="g-ans-src">${q.au ? esc(q.au) : ''}${q.w ? '《' + esc(q.w) + '》' : ''} <a class="g-wlink" href="${R}scenes/?id=${sid}">看这个场景 ↗</a></p>`;
+      ui.src.textContent = '';
     } else {
       combo = 0;
       score.set(cur, 0);
@@ -54,15 +49,16 @@ export async function render(root, data, R) {
       btn.classList.add('shake');
       const rightBtn = ui.opts.querySelectorAll('.g-chip')[q.ans];
       rightBtn.classList.add('right');
-      ui.src.textContent = `✗ 答案是「${sc ? sc.name : sid}」${q.au ? ' · ' + q.au : ''}${q.w ? '《' + q.w + '》' : ''}`;
+      ui.fb.innerHTML = `<p class="g-ans">✗ 答案是「${sc ? sc.name : sid}」</p>${q.au ? `<p class="g-ans-src">${esc(q.au)}${q.w ? '《' + esc(q.w) + '》' : ''}</p>` : ''}`;
+      ui.src.textContent = '';
     }
-    // 讲解闭环
+    // 讲解闭环（追加到答案下方）
     const rec = await recordFor(q.gid);
     if (rec) {
-      ui.fb.innerHTML = (sc && sc.desc ? `<p class="g-sc-desc">${esc(sc.desc)}</p>` : '') + explainBox(rec, R, { wrong: !ok });
+      ui.fb.innerHTML += (sc && sc.desc ? `<p class="g-sc-desc">${esc(sc.desc)}</p>` : '') + explainBox(rec, R, { wrong: !ok });
       if (!ok) recordMistake(rec, 'scene');
     } else {
-      ui.fb.innerHTML = (sc && sc.desc ? `<p class="g-sc-desc">${esc(sc.desc)}</p>` : '') + explainBox({ t: q.t, a: q.au, w: q.w }, R, { wrong: !ok });
+      ui.fb.innerHTML += (sc && sc.desc ? `<p class="g-sc-desc">${esc(sc.desc)}</p>` : '') + explainBox({ t: q.t, a: q.au, w: q.w }, R, { wrong: !ok });
       if (!ok) recordMistake({ t: q.t, a: q.au, w: q.w, n: '', x: '' }, 'scene');
     }
     // 同场景延伸：答对后展示该场景还能用的句子
@@ -74,7 +70,12 @@ export async function render(root, data, R) {
       }
       if (rel.length) ui.fb.innerHTML += `<p class="g-sc-more">这个场景还能用：<b>${rel.map(esc).join('</b> · <b>')}</b></p>`;
     }
-    setTimeout(() => { idx++; load(); }, ok ? 1900 : 2600);
+    // 答案已展示，等用户点「下一题」再切换
+    const nx = document.createElement('button');
+    nx.type = 'button'; nx.className = 'g-btn g-next'; nx.textContent = '下一题 →';
+    nx.onclick = () => { idx++; load(); };
+    ui.opts.innerHTML = '';
+    ui.opts.appendChild(nx);
   }
 
   function done() {

@@ -57,15 +57,22 @@ export async function render(root, data, R) {
             items.push({ t: q.order.map(i => q.blocks[i]).join(''), a: q.au, w: q.w, ok: true });
             const intr = [...blocks].find(b => !b.classList.contains('used'));
             if (intr) { intr.classList.add('intr'); intr.textContent = '（干扰）' + intr.textContent; }
-            ui.src.innerHTML = `<span class="g-lives">已错 ${fails} 次</span> <span class="g-score-cur2">${cur} 分</span> ✓ 拼成！「${esc(q.order.map(i => q.blocks[i]).join(''))}」<a class="g-wlink" href="${R}works/?w=${encodeURIComponent(q.w)}">查看原文 ↗</a>`;
+            ui.src.innerHTML = `<span class="g-lives">已错 ${fails} 次</span> <span class="g-score-cur2">${cur} 分</span>`;
+            // 答案显示在讲解上方
+            ui.fb.innerHTML = `<p class="g-ans">✓ 拼成！「${esc(q.order.map(i => q.blocks[i]).join(''))}」</p><p class="g-ans-src">— ${esc(q.au || '佚名')}《${esc(q.w)}》<a class="g-wlink" href="${R}works/?w=${encodeURIComponent(q.w)}">查看原文 ↗</a></p>`;
             sfx.win();
             burst(ui.stage, 'gold');
-            // 讲解闭环
+            // 讲解闭环（追加到答案下方）
             (async () => {
               const rec = await recordFor(q.gid);
-              if (rec) ui.fb.innerHTML = explainBox(rec, R);
+              if (rec) ui.fb.innerHTML += explainBox(rec, R);
             })();
-            setTimeout(() => { idx++; load(); }, 2200);
+            // 答案已展示，等用户点「下一题」再切换
+            const nx = document.createElement('button');
+            nx.type = 'button'; nx.className = 'g-btn g-next'; nx.textContent = '下一题 →';
+            nx.onclick = () => { idx++; load(); };
+            ui.opts.innerHTML = '';
+            ui.opts.appendChild(nx);
           }
         } else {
           // 放错：回池 + 计错
@@ -81,8 +88,15 @@ export async function render(root, data, R) {
             items.push({ t: q.order.map(i => q.blocks[i]).join(''), a: q.au, w: q.w, ok: false });
             blocks.forEach(b => b.disabled = true);
             q.order.forEach((oi, si) => { slots[si].textContent = q.blocks[oi]; slots[si].classList.add('on'); });
-            ui.src.innerHTML = `<span class="g-lives bad">已跳过</span> 正确顺序：${q.order.map(i => q.blocks[i]).join('｜')}`;
-            setTimeout(() => { idx++; load(); }, 2200);
+            ui.src.innerHTML = `<span class="g-lives bad">已跳过</span>`;
+            // 答案显示在讲解区顶部
+            ui.fb.innerHTML = `<p class="g-ans">✗ 正确顺序：${q.order.map(i => q.blocks[i]).join('｜')}</p>`;
+            // 答案已展示，等用户点「下一题」再切换
+            const nx2 = document.createElement('button');
+            nx2.type = 'button'; nx2.className = 'g-btn g-next'; nx2.textContent = '下一题 →';
+            nx2.onclick = () => { idx++; load(); };
+            ui.opts.innerHTML = '';
+            ui.opts.appendChild(nx2);
           }
         }
       };
