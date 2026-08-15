@@ -3,6 +3,7 @@
 import { getSuggest } from './datacache.js';
 import { decompress, decodeMsgpack } from './codec.js';
 import { esc } from './util.js';
+import { normalizeQuery } from './i18n.js';
 
 const HIST_KEY = 'ciju.hist';
 const HIST_MAX = 8;
@@ -34,7 +35,7 @@ function lowerBound(arr, key) {
 
 export function prefixSearch(qRaw, limit = 8) {
   if (!LIST) return [];
-  const q = (qRaw || '').trim();
+  const q = normalizeQuery((qRaw || '').trim());   // 繁体查询先归一成简体再前缀匹配（词典全简体）
   if (!q) return [];
   const keys = [q];
   const lower = q.toLowerCase();

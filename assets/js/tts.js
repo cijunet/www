@@ -1,4 +1,6 @@
 // 语音朗读（Web Speech API，零依赖）。为每张 .q 卡片注入「朗读」按钮，朗读中切换为「停止」。
+// 朗读语言跟随简繁模式：繁体模式下念繁体内容用 zh-TW 声线，简体回退 zh-CN。
+import { getMode } from './i18n.js';
 // 两个坑（旧实现踩过）：
 //  1) 'end' 是 SpeechSynthesisUtterance 的事件，不是 speechSynthesis 的 —— 挂在后者上永远不触发，
 //     而且每张卡都挂一个还不解绑，等于内存泄漏。这里改成 utterance.onend。
@@ -30,7 +32,7 @@ function speak(btn, txt) {
   if (!btn.dataset.label) btn.dataset.label = btn.textContent;
   stopAll();
   const u = new SpeechSynthesisUtterance(txt);
-  u.lang = 'zh-CN'; u.rate = 0.9;
+  u.lang = getMode() === 't' ? 'zh-TW' : 'zh-CN'; u.rate = 0.9;
   const vs = SYN.getVoices();
   for (let i = 0; i < vs.length; i++) {
     if (/zh|cmn|Chinese/i.test(vs[i].lang + vs[i].name)) { u.voice = vs[i]; break; }

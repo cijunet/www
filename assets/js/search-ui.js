@@ -10,6 +10,7 @@ import * as router from './router.js';
 import { mountSuggest, pushHistory, history, clearHistory } from './suggest.js';
 import { esc } from './util.js';
 import { lengthTier, tierLabel } from './card.js';
+import { normalizeQuery, displayText } from './i18n.js';
 
 const BLOCK = 30;         // 每块条数
 const EST_H = 172;        // 单卡估高（未测量时先用它撑住滚动条）
@@ -199,7 +200,8 @@ function currentState() {
 
 function runQuery(st, { push = false } = {}) {
   lastState = st;
-  const q = st.q || '';
+  // 简体归一后再分词：高亮在「简体原文」上匹配，命中后整卡转繁体时 <mark> 内容会一并转回
+  const q = normalizeQuery(st.q || '');
   curTerms = q
     ? (st.mode === 'exact' ? [q] : q.split(/[\s,，、]+/).filter(Boolean))
     : [];
@@ -328,7 +330,7 @@ export function mountSearch({ base }) {
         const sp = new URLSearchParams(r.q);
         for (const [k, v] of sp) st[k] = v;
         if (st.q) elInput.value = st.q; else elInput.value = '';
-        if (!st.q && r.text) elInput.placeholder = r.text;
+        if (!st.q && r.text) elInput.placeholder = displayText(r.text);
         runQuery({ ...st, q: st.q || '' }, { push: true });
       }
     });

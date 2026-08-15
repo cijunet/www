@@ -30,6 +30,7 @@
 <link rel="modulepreload" href="../assets/js/util.js">
 <link rel="modulepreload" href="../assets/js/clipboard.js">
 <link rel="modulepreload" href="../assets/js/theme.js">
+<link rel="modulepreload" href="../assets/js/i18n.js">
 <link rel="modulepreload" href="../assets/js/tts.js">
 <link rel="modulepreload" href="../assets/js/nav.js">
 <link rel="modulepreload" href="../assets/js/random.js">
@@ -41,6 +42,8 @@
 <link rel="modulepreload" href="../assets/js/detail.js">
 <link rel="modulepreload" href="../assets/js/perf.js">
 <link rel="modulepreload" href="../assets/js/works.js">
+<link rel="modulepreload" href="../assets/js/games.js">
+<link rel="modulepreload" href="../assets/js/game-common.js">
 <link rel="modulepreload" href="../assets/js/datacache.js">
 <link rel="modulepreload" href="../assets/js/db.js">
 <link rel="modulepreload" href="../assets/js/hashsearch.js">
@@ -56,9 +59,14 @@
       <span class="brand-text"><b>词句</b><i>此刻，说句好的</i></span>
     </a>
     <nav class="nav">
-      <a href="../">首页</a><a href="../scenes/">按场景</a><a href="../moods/">按心情</a><a href="../places/">按地点</a><a href="../authors/">按作者</a><a href="../works/">原文</a><a href="../games/">游戏</a><a href="../search/">搜索</a>
+      <a href="../">首页</a><a href="../scenes/">按场景</a><a href="../moods/">按心情</a><a href="../places/">按地点</a><a href="../authors/">按作者</a>
     </nav>
     <button class="nav-toggle" aria-label="菜单" data-nav-toggle>☰</button>
+    <div class="toggles">
+      <a class="nav-icon" href="../search/" title="搜索" aria-label="搜索">搜</a><a class="nav-icon" href="../games/" title="游戏" aria-label="游戏">玩</a><a class="nav-icon" href="../works/" title="原文" aria-label="原文">原</a>
+      <button class="theme-toggle lang-toggle" type="button" data-lang-toggle title="切换到繁體" aria-label="切换到繁體">繁</button>
+      <button class="theme-toggle" type="button" data-theme-toggle aria-label="切换明暗模式" title="切换明暗模式">暗</button>
+    </div>
   </div>
 </header>
 <section class="page-hero">
@@ -170,7 +178,8 @@
   <a class="tb" data-tb="moods" href="../moods/"><span class="tb-ic">☺</span><span>心情</span></a>
   <a class="tb" data-tb="places" href="../places/"><span class="tb-ic">⌖</span><span>地点</span></a>
   <a class="tb" data-tb="authors" href="../authors/"><span class="tb-ic">✎</span><span>作者</span></a>
-  <a class="tb" data-tb="games" href="../games/"><span class="tb-ic">🎮</span><span>游戏</span></a>
+  <a class="tb" data-tb="games" href="../games/"><span class="tb-ic">♟</span><span>游戏</span></a>
+  <a class="tb" data-tb="search" href="../search/"><span class="tb-ic">⌕</span><span>搜索</span></a>
 </nav>
 <script type="module" src="../assets/js/site.js"></script>
 

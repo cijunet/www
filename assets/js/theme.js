@@ -8,23 +8,19 @@ function applyTheme(t) {
   document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
   const m = document.querySelector('meta[name="theme-color"]');
   if (m) m.setAttribute('content', dark ? DARK_COLOR : LIGHT_COLOR);
+  syncLabel();
 }
-function icon() { return document.documentElement.getAttribute('data-theme') === 'dark' ? '☀' : '🌙'; }
+// 明暗开关单字标签：暗色模式显示「明」（点击回明），亮色模式显示「暗」（点击切暗）
+function syncLabel() {
+  const btn = document.querySelector('[data-theme-toggle]');
+  if (btn) btn.textContent = document.documentElement.getAttribute('data-theme') === 'dark' ? '明' : '暗';
+}
 
 export function mountTheme() {
   let saved = null;
   try { saved = localStorage.getItem(KEY); } catch (e) {}
   if (saved) applyTheme(saved);
   else applyTheme(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-
-  const head = document.querySelector('.head-inner');
-  if (head && !document.querySelector('[data-theme-toggle]')) {
-    const b = document.createElement('button');
-    b.className = 'theme-toggle'; b.type = 'button'; b.setAttribute('data-theme-toggle', '');
-    b.setAttribute('aria-label', '切换明暗模式'); b.title = '切换明暗模式';
-    b.textContent = icon();
-    head.appendChild(b);
-  }
 
   // 用户没手动选过时，跟随系统偏好实时变化
   if (window.matchMedia) {
@@ -34,8 +30,6 @@ export function mountTheme() {
       try { s = localStorage.getItem(KEY); } catch (err) {}
       if (s) return;
       applyTheme(e.matches ? 'dark' : 'light');
-      const btn = document.querySelector('[data-theme-toggle]');
-      if (btn) btn.textContent = icon();
     };
     if (mq.addEventListener) mq.addEventListener('change', onChange);
     else if (mq.addListener) mq.addListener(onChange);
@@ -46,7 +40,6 @@ export function mountTheme() {
     if (!t) return;
     const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
     applyTheme(next);
-    t.textContent = icon();
     try { localStorage.setItem(KEY, next); } catch (e) {}
   });
 }

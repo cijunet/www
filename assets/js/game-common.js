@@ -91,8 +91,9 @@ export function scoreBar(root, { max }) {
 }
 
 // 玩法外壳（返回导航 + 题面 + 选项区 + 反馈区（讲解）+ 底部出处 + 音效开关）
+// ignore-opencc：游戏题面/选项/讲解全程保持简体——玩法校验读的是 DOM 简体文本，繁体模式下不能转换。
 export function wrap(root, title) {
-  root.innerHTML = `<div class="g-play">
+  root.innerHTML = `<div class="g-play ignore-opencc">
     <p class="g-back"><a href="${baseHref()}games/"><span>‹</span> 返回游戏</a></p>
     <h2 class="g-play-title"><span>${title}</span><button type="button" class="g-mute" data-mute aria-label="音效开关" title="音效开关">${isMuted() ? '🔇' : '🔊'}</button></h2>
     <div class="g-stage"></div>

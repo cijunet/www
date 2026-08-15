@@ -20,6 +20,7 @@ export function mountNav() {
     moods: /^\/moods\//,
     places: /^\/places\//,
     authors: /^\/authors\//,
+    search: /^\/search\//,
   };
   const p = location.pathname;
   document.querySelectorAll('.tabbar .tb').forEach(a => {

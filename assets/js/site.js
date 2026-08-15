@@ -2,6 +2,7 @@
 // 各模块自带守卫——搜索页(v2)的搜索框由 search-ui 接管(search-delegate 自动让位)，
 // 无对应钩子的页面相关模块直接 no-op，互不干扰。
 import { mountTheme } from './theme.js';
+import { mountLang } from './i18n.js';
 import { mountClipboard } from './clipboard.js';
 import { mountTTS } from './tts.js';
 import { mountNav, mountFilters } from './nav.js';
@@ -15,6 +16,16 @@ import { mountPerf } from './perf.js';
 import { mountWorks, mountWorksIndex, mountWorksDetail, ensureWorksMeta } from './works.js';
 import { mountGamesIndex, mountGame } from './games.js';
 import { getManifest, getShard, getIndex, getSuggest } from './datacache.js';
+import { baseHref } from './util.js';
+
+// Service Worker：让站点具备 App 体验（可安装、可离线、离线回退首页）。
+// 只在安全上下文（https / localhost）注册；sw.js 位于站点根（baseHref()），
+// 绝不能注册到 /assets/sw.js——历史曾因 baseHref 拼接错位导致 SW 从未装上（404）。
+function mountSW() {
+  if (!('serviceWorker' in navigator)) return;
+  if (location.protocol !== 'https:' && !/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) return;
+  navigator.serviceWorker.register(baseHref() + 'sw.js').catch(e => console.error('[sw] 注册失败', e));
+}
 
 // 首页后台预载：只下载主分片（今日板块取句 + 搜索记录共用同一份，datacache 去重只下一遍）。
 // 渐进优先预载（顺序补齐，全程 fire-and-forget，不阻塞首屏 paint）：
@@ -22,7 +33,12 @@ import { getManifest, getShard, getIndex, getSuggest } from './datacache.js';
 //   P2 主分片 ×6（首页随机/相关/今日卡片、全站浏览）—— 先下，保证首屏词句最快出现；并发 ≤3 避免与首屏抢带宽；
 //   P3 搜索索引 + 建议 —— P2 完成后再下。拼音索引不预载（ensurePinyin 按需拉取，省 ~330KB 首访流量）。
 // datacache 的 inflight 去重 + IDB 缓存保证：搜索页 ensureIndex 直接复用，绝不重复下载。
+function saveDataOn() {
+  const c = navigator.connection;
+  return !!(c && (c.saveData === true || /(^|-)2g$/.test(c.effectiveType || '')));
+}
 function prefetchAll() {
+  if (saveDataOn()) return;   // 省流量 / 2G：只按需取（今日卡片、搜索按需拉片），不做全量后台预载，避免与首屏抢带宽
   (async () => {
     try {
       const m = await getManifest();
@@ -50,8 +66,11 @@ function prefetchAll() {
 function boot() {
   // 兼容量：旧 app.js 曾在这里写 window.__CIJU_V2，站内样式/第三方脚本可能读它
   window.__CIJU_V2 = isV2();
+  // PWA：注册 Service Worker（https/localhost 才生效）
+  mountSW();
   // 纯 DOM 功能（同步、必成功）
   mountTheme();
+  mountLang();
   mountClipboard();
   mountTTS();
   mountNav();

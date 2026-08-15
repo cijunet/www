@@ -7,6 +7,7 @@ import { loadMeta } from './meta.js';
 import { baseHref, esc as _esc } from './util.js';
 import { fetchJSON } from './hashsearch.js';
 import { getManifest, getShardRecords } from './datacache.js';
+import { displayText } from './i18n.js';
 
 const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
 const CHIP_CAL = [
@@ -76,13 +77,16 @@ export async function mountToday(root = document) {
   if (!box) return;
   const R = baseHref();
 
-  // 第一段：只依赖 today.json + meta（合计 ~150KB），今日板块即刻可见
-  const meta = await loadMeta().catch(() => ({})); setMeta(meta);
+  // 第一段：只依赖 today.json + meta（合计 ~150KB），今日板块即刻可见。
+  // 两路独立（都已被首页 preload / force-cache），并行拉取，首屏标题更早出现。
+  const [meta, tj] = await Promise.all([
+    loadMeta().catch(() => ({})),
+    fetchJSON(R, 'today.json').catch(e => { console.error('[today] 今日数据包加载失败', e); return null; })
+  ]);
+  setMeta(meta);
   const now = new Date();
   const md = mmdd(now);
 
-  let tj = null;
-  try { tj = await fetchJSON(R, 'today.json'); } catch (e) { console.error('[today] 今日数据包加载失败', e); }
   const td = (tj && tj.days) ? tj.days[md] : null;
   if (!td) {
     // 数据缺失（闰日 0229 等无数据天）：正常降级，不误报网络错误
@@ -197,6 +201,6 @@ function paintHotChips(R, meta, theme, md) {
   const q = document.querySelector('.hero-search input[name="q"]');
   if (q) {
     const prefix = (theme && theme.n) ? '今日' + shortName(theme.n) + '，' : '';
-    q.placeholder = prefix + '你现在是什么处境？' + picked.slice(0, 4).map(id => shortName(smap[id].name)).join('、') + '…';
+    q.placeholder = displayText(prefix + '你现在是什么处境？' + picked.slice(0, 4).map(id => shortName(smap[id].name)).join('、') + '…');
   }
 }

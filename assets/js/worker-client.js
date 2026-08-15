@@ -5,6 +5,7 @@ import {
   setDataBase, getManifest, getIndex, getPinyin, getShard
 } from './datacache.js';
 import { baseHref } from './util.js';
+import { normalizeQuery } from './i18n.js';
 
 let W = null;
 let BASE = '';
@@ -94,7 +95,7 @@ export function query(o) {
   const id = ++rid;
   W.postMessage({
     t: 'q', rid: id,
-    q: o.q || '', mode: o.mode || 'auto',
+    q: normalizeQuery(o.q || ''), mode: o.mode || 'auto',
     f: o.f || null, sort: o.sort || ''
   });
   return id;
